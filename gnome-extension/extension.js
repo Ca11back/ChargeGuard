@@ -358,9 +358,6 @@ class ChargeGuardIndicator extends QuickSettings.SystemIndicator {
     _init(quickSettingsMenu) {
         super._init();
 
-        this._indicator = this._addIndicator();
-        this._indicator.gicon = themedIcon(ICONS.ready);
-
         this._quickSettingsMenu = quickSettingsMenu;
         this._client = new ChargeGuardClient();
         this._toggle = new ChargeGuardToggle(this._client);
