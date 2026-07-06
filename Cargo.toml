@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "crates/chargeguard-core",
+    "crates/chargeguardd",
+    "crates/chargeguard-cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/chargeguard/chargeguard"
+
+[workspace.dependencies]
+chargeguard-core = { path = "crates/chargeguard-core" }
+clap = { version = "4.6.1", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tempfile = "3.27.0"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+zbus = { version = "5.16.0", default-features = false, features = ["tokio"] }
+zbus_polkit = { version = "5.0.0", default-features = false, features = ["tokio"] }

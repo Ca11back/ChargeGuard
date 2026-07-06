@@ -1,0 +1,52 @@
+# Maintainer: ChargeGuard contributors
+pkgname=chargeguard
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Native Linux battery charging mode manager"
+arch=("x86_64")
+url="https://github.com/chargeguard/chargeguard"
+license=("MIT")
+depends=("dbus" "glibc" "gcc-libs" "polkit")
+makedepends=("cargo")
+install="chargeguard.install"
+source=()
+sha256sums=()
+
+_project_root="${startdir}/../.."
+
+build() {
+  cd "${_project_root}"
+  export CARGO_TARGET_DIR="${srcdir}/target"
+  cargo build --release --locked --workspace --all-features
+}
+
+check() {
+  cd "${_project_root}"
+  export CARGO_TARGET_DIR="${srcdir}/target"
+  cargo test --locked --workspace --all-features
+}
+
+package() {
+  cd "${_project_root}"
+
+  install -Dm755 "${srcdir}/target/release/chargeguard" \
+    "${pkgdir}/usr/bin/chargeguard"
+  install -Dm755 "${srcdir}/target/release/chargeguardd" \
+    "${pkgdir}/usr/libexec/chargeguardd"
+
+  install -Dm644 "packaging/dbus/io.github.ChargeGuard1.service" \
+    "${pkgdir}/usr/share/dbus-1/system-services/io.github.ChargeGuard1.service"
+  install -Dm644 "packaging/dbus/io.github.ChargeGuard1.conf" \
+    "${pkgdir}/usr/share/dbus-1/system.d/io.github.ChargeGuard1.conf"
+  install -Dm644 "packaging/polkit/io.github.ChargeGuard1.policy" \
+    "${pkgdir}/usr/share/polkit-1/actions/io.github.ChargeGuard1.policy"
+  install -Dm644 "packaging/systemd/chargeguardd.service" \
+    "${pkgdir}/usr/lib/systemd/system/chargeguardd.service"
+
+  install -Dm644 "docs/architecture.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/architecture.md"
+  install -Dm644 "docs/compatibility.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/compatibility.md"
+  install -Dm644 "LICENSE" \
+    "${pkgdir}/usr/share/licenses/chargeguard/LICENSE"
+}

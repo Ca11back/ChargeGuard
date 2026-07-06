@@ -1,0 +1,10 @@
+# Local AI/dev workflow state
+.agents/
+.codex/
+.trellis/
+AGENTS.md
+CHARGEGUARD_AGENT_SPEC.md
+
+# Generated local indexes and build output
+.codegraph/
+target/

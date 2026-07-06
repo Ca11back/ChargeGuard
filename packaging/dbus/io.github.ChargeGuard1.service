@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=io.github.ChargeGuard1
+Exec=/usr/libexec/chargeguardd
+User=root
+SystemdService=chargeguardd.service

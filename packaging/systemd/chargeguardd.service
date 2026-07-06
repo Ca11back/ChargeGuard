@@ -1,0 +1,13 @@
+[Unit]
+Description=ChargeGuard native battery charging mode service
+Documentation=man:chargeguard(1)
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=io.github.ChargeGuard1
+ExecStart=/usr/libexec/chargeguardd
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
