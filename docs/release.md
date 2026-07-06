@@ -46,7 +46,7 @@ cd packaging/arch
 CARGO_HOME=/tmp/cargo-home makepkg -f --cleanbuild --noconfirm
 ```
 
-The `CI` workflow runs lightweight checks on pushes and pull requests. The
+The `CI` workflow runs lightweight checks only when triggered manually. The
 heavier `Package Check` workflow builds the GNOME extension zip and Arch packages
 only when run manually or when a version tag is pushed.
 
