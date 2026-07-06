@@ -85,7 +85,7 @@ pub fn display_label(raw: &str) -> String {
     match normalize_mode(raw).as_str() {
         "fast" => "Fast Charge".to_string(),
         "standard" => "Standard".to_string(),
-        "long life" => "Battery Care / Long Life".to_string(),
+        "long life" => "Long Life".to_string(),
         "adaptive" => "Adaptive".to_string(),
         "custom" => "Custom".to_string(),
         "trickle" => "Trickle".to_string(),
@@ -134,7 +134,7 @@ mod tests {
     fn normalizes_case_spaces_and_underscores_for_matching() {
         assert_eq!(normalize_mode("Long_Life"), normalize_mode(" long   life "));
         assert_eq!(normalize_mode("FAST"), normalize_mode("Fast"));
-        assert_eq!(display_label("Long_Life"), "Battery Care / Long Life");
+        assert_eq!(display_label("Long_Life"), "Long Life");
     }
 
     #[test]
