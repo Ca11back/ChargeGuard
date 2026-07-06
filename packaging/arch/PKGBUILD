@@ -7,7 +7,7 @@ pkgdesc="Native Linux battery charging mode manager"
 arch=("x86_64")
 url="https://github.com/Ca11back/ChargeGuard"
 license=("MIT")
-makedepends=("cargo")
+makedepends=("cargo" "gettext")
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=("SKIP")
 
@@ -52,6 +52,8 @@ package_chargeguard() {
     "${pkgdir}/usr/share/doc/chargeguard/compatibility.md"
   install -Dm644 "README.md" \
     "${pkgdir}/usr/share/doc/chargeguard/README.md"
+  install -Dm644 "README.zh-CN.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/README.zh-CN.md"
   install -Dm644 "LICENSE" \
     "${pkgdir}/usr/share/licenses/chargeguard/LICENSE"
 }
@@ -68,6 +70,9 @@ package_gnome-shell-extension-chargeguard() {
     "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/extension.js"
   install -Dm644 "gnome-extension/README.md" \
     "${pkgdir}/usr/share/doc/gnome-shell-extension-chargeguard/README.md"
+  install -d "${pkgdir}/usr/share/locale/zh_CN/LC_MESSAGES"
+  msgfmt -c -o "${pkgdir}/usr/share/locale/zh_CN/LC_MESSAGES/chargeguard.mo" \
+    "gnome-extension/po/zh_CN.po"
   install -Dm644 "LICENSE" \
     "${pkgdir}/usr/share/licenses/gnome-shell-extension-chargeguard/LICENSE"
 }

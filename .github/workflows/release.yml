@@ -39,8 +39,9 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
-              pacman -Syu --noconfirm gnome-shell
-              gnome-extensions pack --force --out-dir=dist gnome-extension
+              pacman -Syu --noconfirm gettext gnome-shell
+              msgfmt -c -o /tmp/chargeguard.mo gnome-extension/po/zh_CN.po
+              gnome-extensions pack --force --podir=po --gettext-domain=chargeguard --out-dir=dist gnome-extension
             '
           version="${RELEASE_TAG#v}"
           mv dist/chargeguard@github.com.shell-extension.zip \
@@ -51,19 +52,14 @@ jobs:
           cd dist
           sha256sum * > SHA256SUMS
 
-      - name: Create release notes
+      - name: Prepare release notes
         run: |
-          cat > RELEASE_NOTES.md <<EOF
-          ChargeGuard ${RELEASE_TAG}
-
-          Artifacts:
-          - GNOME Shell extension zip for manual installation or review.
-          - SHA256SUMS for uploaded artifacts.
-
-          Arch users should prefer the AUR packages:
-          - chargeguard
-          - gnome-shell-extension-chargeguard
-          EOF
+          notes_file="docs/release-notes/${RELEASE_TAG}.md"
+          if [ ! -f "${notes_file}" ]; then
+            echo "Missing release notes: ${notes_file}" >&2
+            exit 1
+          fi
+          cp "${notes_file}" RELEASE_NOTES.md
 
       - name: Create GitHub Release
         env:

@@ -10,6 +10,7 @@ Required for the first release:
 - GitHub Release created from that tag
 - GNOME Shell extension zip built by `gnome-extensions pack`
 - SHA-256 checksum file for uploaded release assets
+- Bilingual release notes under `docs/release-notes/`
 - AUR source package metadata: `PKGBUILD`, `.SRCINFO`, and `chargeguard.install`
 
 Standalone CLI binary archives are optional. A working ChargeGuard installation
@@ -33,7 +34,9 @@ cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 python3 -m json.tool gnome-extension/metadata.json
 mkdir -p /tmp/chargeguard-extension-pack
-gnome-extensions pack --force --out-dir=/tmp/chargeguard-extension-pack gnome-extension
+msgfmt -c -o /tmp/chargeguard.mo gnome-extension/po/zh_CN.po
+gnome-extensions pack --force --podir=po --gettext-domain=chargeguard \
+  --out-dir=/tmp/chargeguard-extension-pack gnome-extension
 ```
 
 Build the Arch packages from the current checkout:
@@ -60,10 +63,15 @@ only when run manually or when a version tag is pushed.
    git push origin main v0.1.0
    ```
 
-3. Run the `Release` GitHub Actions workflow, or let the tag trigger create a
+3. Ensure `docs/release-notes/v0.1.0.md` exists.
+4. Run the `Release` GitHub Actions workflow, or let the tag trigger create a
    draft release.
-4. Review the generated GNOME extension zip and checksum file.
-5. Publish the GitHub Release when the assets are correct.
+5. Review the generated GNOME extension zip, checksum file, and bilingual release notes.
+6. Publish the GitHub Release when the assets are correct.
+
+If a draft release was created from an older `v0.1.0` tag and deleted before
+publication, either delete and recreate that tag on the final release commit or
+use the next version tag. Do not publish assets from a stale tag.
 
 ## AUR
 

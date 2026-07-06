@@ -2,6 +2,7 @@
   "uuid": "chargeguard@github.com",
   "name": "ChargeGuard",
   "description": "Manage native battery charging modes from GNOME Quick Settings.",
+  "gettext-domain": "chargeguard",
   "shell-version": [
     "50"
   ],

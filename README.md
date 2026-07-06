@@ -1,5 +1,7 @@
 # ChargeGuard
 
+English | [简体中文](README.zh-CN.md)
+
 ChargeGuard manages native Linux battery charging modes from GNOME Quick
 Settings, backed by a small privileged D-Bus service.
 
@@ -22,6 +24,10 @@ The current implementation targets native charging mode attributes:
 ChargeGuard validates writes against the device's current `charge_types`
 allow-list. It does not write generic percentage thresholds or vendor legacy
 controls.
+
+The GNOME extension shows native mode names as reported by the firmware, for
+example `Fast`, `Standard`, or `Long_Life`. These mode tokens are not translated
+or reinterpreted by the UI.
 
 ## Components
 

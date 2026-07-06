@@ -7,7 +7,7 @@ The package is intentionally split:
 - `chargeguard` installs the privileged backend, CLI, D-Bus activation files,
   polkit policy, systemd unit, docs, and license.
 - `gnome-shell-extension-chargeguard` installs the GNOME Quick Settings
-  extension and depends on `chargeguard`.
+  extension, gettext translations, and depends on `chargeguard`.
 
 ## Local Package Check
 

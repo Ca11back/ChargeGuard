@@ -21,11 +21,12 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
-              pacman -Syu --noconfirm gnome-shell nodejs python
+              pacman -Syu --noconfirm gettext gnome-shell nodejs python
               python3 -m json.tool gnome-extension/metadata.json
               node --input-type=module --check < gnome-extension/extension.js
+              msgfmt -c -o /tmp/chargeguard.mo gnome-extension/po/zh_CN.po
               mkdir -p /tmp/chargeguard-extension-pack
-              gnome-extensions pack --force --out-dir=/tmp/chargeguard-extension-pack gnome-extension
+              gnome-extensions pack --force --podir=po --gettext-domain=chargeguard --out-dir=/tmp/chargeguard-extension-pack gnome-extension
             '
 
   arch-package:
@@ -48,7 +49,7 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
-              pacman -Syu --noconfirm cargo dbus git polkit
+              pacman -Syu --noconfirm cargo dbus gettext git polkit
               useradd -m builder
               chown -R builder:builder /workspace
               su builder -c "cd /workspace/packaging/arch && makepkg --printsrcinfo > .SRCINFO.generated"

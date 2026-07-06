@@ -146,7 +146,7 @@ class ChargeGuardClient {
 }
 
 function modeDisplayName(mode) {
-    return mode?.label || mode?.raw || _('Unknown');
+    return mode?.raw || mode?.label || _('Unknown');
 }
 
 function deviceDisplayName(device) {
@@ -155,7 +155,7 @@ function deviceDisplayName(device) {
 
 function currentModeLabel(device) {
     const nativeMode = device?.nativeMode;
-    return nativeMode?.currentLabel || nativeMode?.current || _('Unknown');
+    return nativeMode?.current || nativeMode?.currentLabel || _('Unknown');
 }
 
 function selectDevice(devices) {
