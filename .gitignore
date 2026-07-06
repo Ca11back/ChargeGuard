@@ -8,3 +8,10 @@ CHARGEGUARD_AGENT_SPEC.md
 # Generated local indexes and build output
 .codegraph/
 target/
+
+# Arch package build output
+packaging/arch/pkg/
+packaging/arch/src/
+packaging/arch/*.pkg.tar*
+packaging/arch/*.tar.gz
+packaging/arch/*.tar.zst

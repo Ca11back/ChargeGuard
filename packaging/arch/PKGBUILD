@@ -1,33 +1,36 @@
 # Maintainer: ChargeGuard contributors
-pkgname=chargeguard
+pkgbase=chargeguard
+pkgname=("chargeguard" "gnome-shell-extension-chargeguard")
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Native Linux battery charging mode manager"
 arch=("x86_64")
-url="https://github.com/chargeguard/chargeguard"
+url="https://github.com/Ca11back/ChargeGuard"
 license=("MIT")
-depends=("dbus" "glibc" "gcc-libs" "polkit")
 makedepends=("cargo")
-install="chargeguard.install"
-source=()
-sha256sums=()
+source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=("SKIP")
 
-_project_root="${startdir}/../.."
+_srcdir="ChargeGuard-${pkgver}"
 
 build() {
-  cd "${_project_root}"
+  cd "${srcdir}/${_srcdir}"
   export CARGO_TARGET_DIR="${srcdir}/target"
-  cargo build --release --locked --workspace --all-features
+  cargo build --release --locked -p chargeguard-cli -p chargeguardd
 }
 
 check() {
-  cd "${_project_root}"
+  cd "${srcdir}/${_srcdir}"
   export CARGO_TARGET_DIR="${srcdir}/target"
   cargo test --locked --workspace --all-features
 }
 
-package() {
-  cd "${_project_root}"
+package_chargeguard() {
+  pkgdesc="Native Linux battery charging mode backend and CLI"
+  depends=("dbus" "gcc-libs" "glibc" "polkit" "systemd")
+  install="chargeguard.install"
+
+  cd "${srcdir}/${_srcdir}"
 
   install -Dm755 "${srcdir}/target/release/chargeguard" \
     "${pkgdir}/usr/bin/chargeguard"
@@ -47,6 +50,24 @@ package() {
     "${pkgdir}/usr/share/doc/chargeguard/architecture.md"
   install -Dm644 "docs/compatibility.md" \
     "${pkgdir}/usr/share/doc/chargeguard/compatibility.md"
+  install -Dm644 "README.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/README.md"
   install -Dm644 "LICENSE" \
     "${pkgdir}/usr/share/licenses/chargeguard/LICENSE"
+}
+
+package_gnome-shell-extension-chargeguard() {
+  pkgdesc="GNOME Quick Settings extension for ChargeGuard"
+  depends=("chargeguard=${pkgver}-${pkgrel}" "gnome-shell")
+
+  cd "${srcdir}/${_srcdir}"
+
+  install -Dm644 "gnome-extension/metadata.json" \
+    "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/metadata.json"
+  install -Dm644 "gnome-extension/extension.js" \
+    "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/extension.js"
+  install -Dm644 "gnome-extension/README.md" \
+    "${pkgdir}/usr/share/doc/gnome-shell-extension-chargeguard/README.md"
+  install -Dm644 "LICENSE" \
+    "${pkgdir}/usr/share/licenses/gnome-shell-extension-chargeguard/LICENSE"
 }

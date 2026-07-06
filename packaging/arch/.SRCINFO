@@ -1,0 +1,24 @@
+pkgbase = chargeguard
+	pkgdesc = Native Linux battery charging mode manager
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/Ca11back/ChargeGuard
+	arch = x86_64
+	license = MIT
+	makedepends = cargo
+	source = chargeguard-0.1.0.tar.gz::https://github.com/Ca11back/ChargeGuard/archive/refs/tags/v0.1.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = chargeguard
+	pkgdesc = Native Linux battery charging mode backend and CLI
+	install = chargeguard.install
+	depends = dbus
+	depends = gcc-libs
+	depends = glibc
+	depends = polkit
+	depends = systemd
+
+pkgname = gnome-shell-extension-chargeguard
+	pkgdesc = GNOME Quick Settings extension for ChargeGuard
+	depends = chargeguard=0.1.0-1
+	depends = gnome-shell

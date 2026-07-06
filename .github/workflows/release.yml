@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, for example v0.1.0"
+        required: true
+        type: string
+      draft:
+        description: "Create the GitHub Release as a draft"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Pack GNOME extension
+        run: |
+          mkdir -p dist
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            archlinux:base-devel \
+            bash -lc '
+              pacman -Syu --noconfirm gnome-shell
+              gnome-extensions pack --force --out-dir=dist gnome-extension
+            '
+          version="${RELEASE_TAG#v}"
+          mv dist/chargeguard@github.com.shell-extension.zip \
+            "dist/gnome-shell-extension-chargeguard-${version}.zip"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Create release notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          ChargeGuard ${RELEASE_TAG}
+
+          Artifacts:
+          - GNOME Shell extension zip for manual installation or review.
+          - SHA256SUMS for uploaded artifacts.
+
+          Arch users should prefer the AUR packages:
+          - chargeguard
+          - gnome-shell-extension-chargeguard
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRAFT_INPUT: ${{ inputs.draft }}
+        run: |
+          draft_flag="--draft"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ "${DRAFT_INPUT}" = "false" ]; then
+            draft_flag=""
+          fi
+
+          gh release create "${RELEASE_TAG}" dist/* \
+            ${draft_flag} \
+            --verify-tag \
+            --title "ChargeGuard ${RELEASE_TAG}" \
+            --notes-file RELEASE_NOTES.md
