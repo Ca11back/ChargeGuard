@@ -36,45 +36,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install GNOME tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnome-shell
-
       - name: Validate metadata
         run: python3 -m json.tool gnome-extension/metadata.json
 
       - name: Check JavaScript syntax
         run: node --input-type=module --check < gnome-extension/extension.js
-
-      - name: Pack extension
-        run: |
-          mkdir -p /tmp/chargeguard-extension-pack
-          gnome-extensions pack --force --out-dir=/tmp/chargeguard-extension-pack gnome-extension
-
-  arch-package:
-    name: Arch package
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create local source archive
-        run: |
-          pkgver=$(awk -F= '/^pkgver=/{print $2}' packaging/arch/PKGBUILD)
-          git archive --format=tar --prefix="ChargeGuard-${pkgver}/" HEAD \
-            | gzip -n > "packaging/arch/chargeguard-${pkgver}.tar.gz"
-
-      - name: Build with makepkg
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            archlinux:base-devel \
-            bash -lc '
-              pacman -Syu --noconfirm cargo dbus git polkit
-              useradd -m builder
-              chown -R builder:builder /workspace
-              su builder -c "cd /workspace/packaging/arch && makepkg --printsrcinfo > .SRCINFO.generated"
-              su builder -c "cd /workspace/packaging/arch && makepkg -f --cleanbuild --noconfirm"
-            '
