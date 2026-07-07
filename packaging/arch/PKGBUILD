@@ -9,7 +9,7 @@ url="https://github.com/Ca11back/ChargeGuard"
 license=("MIT")
 makedepends=("cargo" "gettext")
 source=("${pkgbase}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=("SKIP")
+sha256sums=('b9697f9d9b2ba43684b359eef2be125bb6b07cf30e83ae94401bf2768d73c5bc')
 
 _srcdir="ChargeGuard-${pkgver}"
 

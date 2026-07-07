@@ -8,7 +8,7 @@ pkgbase = chargeguard
 	makedepends = cargo
 	makedepends = gettext
 	source = chargeguard-0.1.0.tar.gz::https://github.com/Ca11back/ChargeGuard/archive/refs/tags/v0.1.0.tar.gz
-	sha256sums = SKIP
+	sha256sums = b9697f9d9b2ba43684b359eef2be125bb6b07cf30e83ae94401bf2768d73c5bc
 
 pkgname = chargeguard
 	pkgdesc = Native Linux battery charging mode backend and CLI
