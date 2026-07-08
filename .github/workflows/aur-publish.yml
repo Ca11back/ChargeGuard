@@ -1,0 +1,150 @@
+name: AUR Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish to AUR, for example v0.1.1"
+        required: true
+        type: string
+      package_base:
+        description: "AUR package base"
+        required: true
+        default: "chargeguard"
+        type: string
+      dry_run:
+        description: "Generate and validate AUR files without pushing"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  aur-publish:
+    name: Publish AUR package
+    runs-on: ubuntu-latest
+    environment: aur-publish
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      AUR_PACKAGE_BASE: ${{ inputs.package_base }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+          if [[ ! "${AUR_PACKAGE_BASE}" =~ ^[a-z0-9][a-z0-9@._+-]*$ ]]; then
+            echo "Invalid AUR package base: ${AUR_PACKAGE_BASE}" >&2
+            exit 1
+          fi
+
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Verify package version
+        run: |
+          set -euo pipefail
+
+          release_version="${RELEASE_TAG#v}"
+          pkgver="$(awk -F= '/^pkgver=/{print $2}' packaging/arch/PKGBUILD)"
+
+          if [ "${pkgver}" != "${release_version}" ]; then
+            echo "PKGBUILD pkgver ${pkgver} does not match ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+      - name: Clone AUR package
+        run: |
+          set -euo pipefail
+
+          git clone "https://aur.archlinux.org/${AUR_PACKAGE_BASE}.git" aur-package
+
+      - name: Copy package files
+        run: |
+          set -euo pipefail
+
+          cp packaging/arch/PKGBUILD aur-package/PKGBUILD
+          cp packaging/arch/chargeguard.install aur-package/chargeguard.install
+
+      - name: Generate AUR metadata
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            archlinux:base-devel \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm git pacman-contrib
+              useradd -m builder
+              chown -R builder:builder /workspace/aur-package
+              su builder -c "cd /workspace/aur-package && updpkgsums"
+              su builder -c "cd /workspace/aur-package && makepkg --printsrcinfo > .SRCINFO"
+              su builder -c "cd /workspace/aur-package && makepkg --verifysource"
+            '
+
+      - name: Show AUR diff
+        run: |
+          set -euo pipefail
+
+          git -C aur-package diff -- PKGBUILD .SRCINFO chargeguard.install
+
+      - name: Configure AUR SSH
+        if: ${{ inputs.dry_run == false }}
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AUR_SSH_PRIVATE_KEY}" ]; then
+            echo "Missing AUR_SSH_PRIVATE_KEY secret" >&2
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${AUR_SSH_PRIVATE_KEY}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          if [ -n "${AUR_KNOWN_HOSTS}" ]; then
+            printf '%s\n' "${AUR_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+          fi
+
+          git -C aur-package config user.name "ChargeGuard Release Bot"
+          git -C aur-package config user.email "actions@github.com"
+          git -C aur-package remote set-url origin "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_BASE}.git"
+
+      - name: Push AUR update
+        if: ${{ inputs.dry_run == false }}
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/aur -o IdentitiesOnly=yes
+        run: |
+          set -euo pipefail
+
+          git -C aur-package add PKGBUILD .SRCINFO chargeguard.install
+
+          if git -C aur-package diff --cached --quiet; then
+            echo "No AUR changes to publish."
+            exit 0
+          fi
+
+          git -C aur-package commit -m "Release ${RELEASE_TAG#v}"
+          git -C aur-package push origin HEAD:master
+
+      - name: Dry-run result
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "Dry run completed. Re-run with dry_run=false to push the AUR update."

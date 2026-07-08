@@ -75,7 +75,24 @@ use the next version tag. Do not publish assets from a stale tag.
 
 ## AUR
 
-After the tag is reachable from GitHub:
+The preferred AUR path is the manual `AUR Publish` GitHub Actions workflow.
+Configure the `aur-publish` environment with required reviewers, then add an
+`AUR_SSH_PRIVATE_KEY` secret for an AUR account that can push the
+`chargeguard` package base. Optionally add `AUR_KNOWN_HOSTS` to pin the AUR SSH
+host key; otherwise the workflow uses `ssh-keyscan` at runtime.
+
+Run the workflow with:
+
+- `tag`: the release tag, for example `v0.1.1`
+- `package_base`: `chargeguard`
+- `dry_run`: `true` first, then `false` after reviewing the generated diff
+
+The workflow checks out the release tag, copies `PKGBUILD` and
+`chargeguard.install`, regenerates checksums from the published GitHub tag
+archive, writes `.SRCINFO`, validates the source, and pushes the AUR update
+only when `dry_run=false`.
+
+Manual fallback after the tag is reachable from GitHub:
 
 ```bash
 cd packaging/arch
@@ -102,10 +119,6 @@ Use one AUR package base, `chargeguard`, with two generated packages:
 
 - `chargeguard`
 - `gnome-shell-extension-chargeguard`
-
-Do not automate the AUR push until the manual release has been reviewed. A later
-automation task should use a manual GitHub Actions trigger, a protected
-environment, and an AUR SSH deploy key.
 
 ## Post-Install Smoke Check
 
