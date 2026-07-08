@@ -138,6 +138,9 @@ fn print_device(device: &BatteryDevice) {
     if let Some(capacity) = device.capacity {
         println!("Capacity: {capacity}%");
     }
+    if let Some(power) = &device.power {
+        println!("Power: {}", format_watts(power.microwatts));
+    }
     println!(
         "Native mode source: {}",
         device.native_mode.source.as_deref().unwrap_or("none")
@@ -159,4 +162,17 @@ fn print_device(device: &BatteryDevice) {
         println!("{message}");
     }
     println!();
+}
+
+fn format_watts(microwatts: u64) -> String {
+    let rounded_tenths = (microwatts + 50_000) / 100_000;
+    if rounded_tenths == 0 {
+        return "0 W".to_string();
+    }
+
+    if rounded_tenths < 100 && !rounded_tenths.is_multiple_of(10) {
+        return format!("{}.{} W", rounded_tenths / 10, rounded_tenths % 10);
+    }
+
+    format!("{} W", (rounded_tenths + 5) / 10)
 }

@@ -155,7 +155,22 @@ function deviceDisplayName(device) {
 
 function currentModeLabel(device) {
     const nativeMode = device?.nativeMode;
-    return nativeMode?.current || nativeMode?.currentLabel || _('Unknown');
+    return nativeMode?.currentLabel || nativeMode?.current || _('Unknown');
+}
+
+function powerSubtitle(device) {
+    const microwatts = device?.power?.microwatts;
+    if (typeof microwatts !== 'number' || !Number.isFinite(microwatts) || microwatts < 0)
+        return null;
+
+    const roundedTenths = Math.round(microwatts / 100000);
+    if (roundedTenths === 0)
+        return '0 W';
+
+    if (roundedTenths < 100 && roundedTenths % 10 !== 0)
+        return `${Math.floor(roundedTenths / 10)}.${roundedTenths % 10} W`;
+
+    return `${Math.round(roundedTenths / 10)} W`;
 }
 
 function selectDevice(devices) {
@@ -301,12 +316,13 @@ class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
         const modeInfo = device.nativeMode;
         const current = currentModeLabel(device);
         const writable = modeInfo?.writable === true;
-        const subtitle = writable ? current : `${current} (${_('read-only')})`;
+        const subtitle = powerSubtitle(device) ?? '';
+        const headerSubtitle = subtitle ? `${current} - ${subtitle}` : current;
 
-        this.title = _('ChargeGuard');
+        this.title = current;
         this.subtitle = subtitle;
         this.gicon = themedIcon(ICONS.ready);
-        this.menu.setHeader(ICONS.ready, deviceDisplayName(device), subtitle);
+        this.menu.setHeader(ICONS.ready, deviceDisplayName(device), headerSubtitle);
 
         if (!writable) {
             const item = new PopupMenu.PopupMenuItem(_('Mode switching is not writable on this device.'));

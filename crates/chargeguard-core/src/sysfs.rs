@@ -7,7 +7,10 @@ use std::{
 use crate::{
     device::PowerSupply,
     error::{ChargeGuardError, Result},
-    model::{BatteryDevice, Diagnostics, NativeModeInfo, ObservedAttribute, RawPowerSupplyEntry},
+    model::{
+        BatteryDevice, BatteryPower, Diagnostics, NativeModeInfo, ObservedAttribute,
+        RawPowerSupplyEntry,
+    },
     parser::{display_label, normalize_mode, parse_charge_types},
 };
 
@@ -23,6 +26,7 @@ const RAW_ATTRIBUTES: &[&str] = &[
     "present",
     "status",
     "capacity",
+    "power_now",
     "manufacturer",
     "model_name",
     "charge_type",
@@ -149,6 +153,9 @@ impl SysfsPowerSupply {
         let status = read_optional_trimmed(&path.join("status"))?;
         let capacity = read_optional_trimmed(&path.join("capacity"))?
             .and_then(|value| value.parse::<u8>().ok());
+        let power = read_optional_trimmed(&path.join("power_now"))?
+            .and_then(|value| value.parse::<u64>().ok())
+            .map(|microwatts| BatteryPower { microwatts });
         let manufacturer = read_optional_trimmed(&path.join("manufacturer"))?;
         let model_name = read_optional_trimmed(&path.join("model_name"))?;
         let native_mode = self.native_mode_info(&id, &path)?;
@@ -162,6 +169,7 @@ impl SysfsPowerSupply {
             capacity,
             manufacturer,
             model_name,
+            power,
             native_mode,
         }))
     }
@@ -353,6 +361,7 @@ mod tests {
                 ("present", "1"),
                 ("status", "Charging"),
                 ("capacity", "94"),
+                ("power_now", "38300000"),
                 ("manufacturer", "COSMX"),
                 ("model_name", "L24X4PG7"),
                 ("charge_types", "[Fast] Standard Long_Life"),
@@ -366,11 +375,50 @@ mod tests {
         assert_eq!(devices.len(), 1);
         assert_eq!(devices[0].id, "BAT1");
         assert_eq!(devices[0].capacity, Some(94));
+        assert_eq!(
+            devices[0].power,
+            Some(BatteryPower {
+                microwatts: 38_300_000
+            })
+        );
         assert_eq!(devices[0].native_mode.current.as_deref(), Some("Fast"));
         assert_eq!(
             raw_modes(&devices[0].native_mode.supported_modes),
             ["Fast", "Standard", "Long_Life"]
         );
+    }
+
+    #[test]
+    fn reports_missing_power_now_as_absent() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[
+                ("type", "Battery"),
+                ("charge_types", "[Fast] Standard Long_Life"),
+            ],
+        );
+
+        let device = fixture.sysfs().get_device("BAT1").unwrap();
+
+        assert_eq!(device.power, None);
+    }
+
+    #[test]
+    fn reports_zero_power_now_as_available() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[
+                ("type", "Battery"),
+                ("power_now", "0"),
+                ("charge_types", "[Fast] Standard Long_Life"),
+            ],
+        );
+
+        let device = fixture.sysfs().get_device("BAT1").unwrap();
+
+        assert_eq!(device.power, Some(BatteryPower { microwatts: 0 }));
     }
 
     #[test]
