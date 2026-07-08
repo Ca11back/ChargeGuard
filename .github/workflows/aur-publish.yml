@@ -92,6 +92,7 @@ jobs:
               su builder -c "cd /workspace/aur-package && makepkg --printsrcinfo > .SRCINFO"
               su builder -c "cd /workspace/aur-package && makepkg --verifysource"
             '
+          sudo chown -R "$(id -u):$(id -g)" aur-package
 
       - name: Show AUR diff
         run: |
