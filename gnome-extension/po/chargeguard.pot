@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ChargeGuard 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/Ca11back/ChargeGuard/issues\n"
-"POT-Creation-Date: 2026-07-06 00:00+0800\n"
+"POT-Creation-Date: 2026-07-08 00:00+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: ChargeGuard contributors\n"
 "Language-Team: ChargeGuard contributors\n"
@@ -40,6 +40,9 @@ msgstr ""
 msgid "Loading battery charge modes"
 msgstr ""
 
+msgid "Details..."
+msgstr ""
+
 msgid "Reading battery charge modes"
 msgstr ""
 
@@ -58,11 +61,65 @@ msgstr ""
 msgid "Unexpected ChargeGuard error"
 msgstr ""
 
-msgid "read-only"
-msgstr ""
-
 msgid "Mode switching is not writable on this device."
 msgstr ""
 
 msgid "No supported modes were reported."
+msgstr ""
+
+msgid "Reading battery details"
+msgstr ""
+
+msgid "Battery details"
+msgstr ""
+
+msgid "Selected battery"
+msgstr ""
+
+msgid "Model"
+msgstr ""
+
+msgid "Manufacturer"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Capacity"
+msgstr ""
+
+msgid "Battery-side power"
+msgstr ""
+
+msgid "Not available"
+msgstr ""
+
+msgid "Native mode"
+msgstr ""
+
+msgid "Current mode"
+msgstr ""
+
+msgid "Current raw mode token"
+msgstr ""
+
+msgid "Supported raw mode tokens"
+msgstr ""
+
+msgid "None reported"
+msgstr ""
+
+msgid "Native mode source"
+msgstr ""
+
+msgid "Diagnostics"
+msgstr ""
+
+msgid "Native sysfs path"
+msgstr ""
+
+msgid "Multiple supported batteries"
+msgstr ""
+
+msgid "Supported batteries"
 msgstr ""

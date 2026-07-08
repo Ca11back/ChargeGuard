@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ChargeGuard 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/Ca11back/ChargeGuard/issues\n"
-"POT-Creation-Date: 2026-07-06 00:00+0800\n"
-"PO-Revision-Date: 2026-07-06 00:00+0800\n"
+"POT-Creation-Date: 2026-07-08 00:00+0800\n"
+"PO-Revision-Date: 2026-07-08 00:00+0800\n"
 "Last-Translator: ChargeGuard contributors\n"
 "Language-Team: Chinese (Simplified)\n"
 "Language: zh_CN\n"
@@ -42,6 +42,9 @@ msgstr "正在加载"
 msgid "Loading battery charge modes"
 msgstr "正在加载电池充电模式"
 
+msgid "Details..."
+msgstr "详情..."
+
 msgid "Reading battery charge modes"
 msgstr "正在读取电池充电模式"
 
@@ -60,11 +63,65 @@ msgstr "错误"
 msgid "Unexpected ChargeGuard error"
 msgstr "ChargeGuard 出现意外错误"
 
-msgid "read-only"
-msgstr "只读"
-
 msgid "Mode switching is not writable on this device."
 msgstr "此设备上的模式切换不可写。"
 
 msgid "No supported modes were reported."
 msgstr "未报告任何受支持的模式。"
+
+msgid "Reading battery details"
+msgstr "正在读取电池详情"
+
+msgid "Battery details"
+msgstr "电池详情"
+
+msgid "Selected battery"
+msgstr "已选电池"
+
+msgid "Model"
+msgstr "型号"
+
+msgid "Manufacturer"
+msgstr "制造商"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Capacity"
+msgstr "电量"
+
+msgid "Battery-side power"
+msgstr "电池侧功率"
+
+msgid "Not available"
+msgstr "不可用"
+
+msgid "Native mode"
+msgstr "原生模式"
+
+msgid "Current mode"
+msgstr "当前模式"
+
+msgid "Current raw mode token"
+msgstr "当前原始模式标记"
+
+msgid "Supported raw mode tokens"
+msgstr "支持的原始模式标记"
+
+msgid "None reported"
+msgstr "未报告"
+
+msgid "Native mode source"
+msgstr "原生模式来源"
+
+msgid "Diagnostics"
+msgstr "诊断"
+
+msgid "Native sysfs path"
+msgstr "原生 sysfs 路径"
+
+msgid "Multiple supported batteries"
+msgstr "多个受支持电池"
+
+msgid "Supported batteries"
+msgstr "受支持电池"

@@ -149,10 +149,6 @@ function modeDisplayName(mode) {
     return mode?.raw || mode?.label || _('Unknown');
 }
 
-function deviceDisplayName(device) {
-    return device?.modelName || device?.id || _('Battery');
-}
-
 function currentModeLabel(device) {
     const nativeMode = device?.nativeMode;
     return nativeMode?.currentLabel || nativeMode?.current || _('Unknown');
@@ -210,7 +206,7 @@ function selectDevice(devices) {
 
 const ChargeGuardToggle = GObject.registerClass(
 class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
-    _init(client) {
+    _init(client, extension) {
         super._init({
             title: _('ChargeGuard'),
             subtitle: _('Loading'),
@@ -218,6 +214,7 @@ class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
         });
 
         this._client = client;
+        this._extension = extension;
         this._requestSerial = 0;
         this._state = {kind: 'loading'};
         this.gicon = themedIcon(ICONS.loading);
@@ -228,10 +225,20 @@ class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
         this._modeSection = new PopupMenu.PopupMenuSection();
         this.menu.addMenuItem(this._statusSection);
         this.menu.addMenuItem(this._modeSection);
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._detailsItem = this.menu.addAction(_('Details...'), () => {
+            this._extension?.openPreferences();
+        });
+        this._detailsItem.visible = Main.sessionMode.allowSettings;
+        if (this.menu._settingsActions)
+            this.menu._settingsActions[this._extension.uuid] = this._detailsItem;
 
         this.connect('destroy', () => {
             this._requestSerial += 1;
+            if (this.menu._settingsActions && this._extension)
+                delete this.menu._settingsActions[this._extension.uuid];
             this._client = null;
+            this._extension = null;
         });
 
         this.refresh();
@@ -322,7 +329,7 @@ class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
         this.title = current;
         this.subtitle = subtitle;
         this.gicon = themedIcon(ICONS.ready);
-        this.menu.setHeader(ICONS.ready, deviceDisplayName(device), headerSubtitle);
+        this.menu.setHeader(ICONS.ready, _('ChargeGuard'), headerSubtitle);
 
         if (!writable) {
             const item = new PopupMenu.PopupMenuItem(_('Mode switching is not writable on this device.'));
@@ -371,12 +378,12 @@ class ChargeGuardToggle extends QuickSettings.QuickMenuToggle {
 
 const ChargeGuardIndicator = GObject.registerClass(
 class ChargeGuardIndicator extends QuickSettings.SystemIndicator {
-    _init(quickSettingsMenu) {
+    _init(quickSettingsMenu, extension) {
         super._init();
 
         this._quickSettingsMenu = quickSettingsMenu;
         this._client = new ChargeGuardClient();
-        this._toggle = new ChargeGuardToggle(this._client);
+        this._toggle = new ChargeGuardToggle(this._client, extension);
         this.quickSettingsItems.push(this._toggle);
 
         this._menuOpenSignalId = this._quickSettingsMenu.connect(
@@ -406,7 +413,7 @@ class ChargeGuardIndicator extends QuickSettings.SystemIndicator {
 export default class ChargeGuardExtension extends Extension {
     enable() {
         const quickSettings = Main.panel.statusArea.quickSettings;
-        this._indicator = new ChargeGuardIndicator(quickSettings.menu);
+        this._indicator = new ChargeGuardIndicator(quickSettings.menu, this);
         quickSettings.addExternalIndicator(this._indicator);
     }
 

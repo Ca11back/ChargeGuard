@@ -68,6 +68,8 @@ package_gnome-shell-extension-chargeguard() {
     "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/metadata.json"
   install -Dm644 "gnome-extension/extension.js" \
     "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/extension.js"
+  install -Dm644 "gnome-extension/prefs.js" \
+    "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/prefs.js"
   install -Dm644 "gnome-extension/README.md" \
     "${pkgdir}/usr/share/doc/gnome-shell-extension-chargeguard/README.md"
   install -d "${pkgdir}/usr/share/locale/zh_CN/LC_MESSAGES"
