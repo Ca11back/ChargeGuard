@@ -94,6 +94,21 @@ msgstr ""
 msgid "Not available"
 msgstr ""
 
+msgid "Cycle count"
+msgstr ""
+
+msgid "Capacity level"
+msgstr ""
+
+msgid "Full capacity"
+msgstr ""
+
+msgid "Design capacity"
+msgstr ""
+
+msgid "Battery health"
+msgstr ""
+
 msgid "Native mode"
 msgstr ""
 

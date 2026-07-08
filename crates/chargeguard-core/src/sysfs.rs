@@ -8,7 +8,7 @@ use crate::{
     device::PowerSupply,
     error::{ChargeGuardError, Result},
     model::{
-        BatteryDevice, BatteryPower, Diagnostics, NativeModeInfo, ObservedAttribute,
+        BatteryDevice, BatteryHealth, BatteryPower, Diagnostics, NativeModeInfo, ObservedAttribute,
         RawPowerSupplyEntry,
     },
     parser::{display_label, normalize_mode, parse_charge_types},
@@ -29,6 +29,12 @@ const RAW_ATTRIBUTES: &[&str] = &[
     "power_now",
     "manufacturer",
     "model_name",
+    "cycle_count",
+    "capacity_level",
+    "energy_full",
+    "energy_full_design",
+    "charge_full",
+    "charge_full_design",
     "charge_type",
     "charge_types",
     "charge_control_start_threshold",
@@ -158,6 +164,7 @@ impl SysfsPowerSupply {
             .map(|microwatts| BatteryPower { microwatts });
         let manufacturer = read_optional_trimmed(&path.join("manufacturer"))?;
         let model_name = read_optional_trimmed(&path.join("model_name"))?;
+        let health = battery_health(&path)?;
         let native_mode = self.native_mode_info(&id, &path)?;
 
         Ok(Some(BatteryDevice {
@@ -170,6 +177,7 @@ impl SysfsPowerSupply {
             manufacturer,
             model_name,
             power,
+            health,
             native_mode,
         }))
     }
@@ -190,6 +198,7 @@ impl SysfsPowerSupply {
             return Ok(NativeModeInfo {
                 supported: true,
                 source: Some("charge_types".to_string()),
+                source_path: Some(charge_types_path),
                 current: parsed.active_raw,
                 current_label,
                 supported_modes: parsed.modes,
@@ -203,6 +212,7 @@ impl SysfsPowerSupply {
             return Ok(NativeModeInfo {
                 supported: false,
                 source: Some("charge_type".to_string()),
+                source_path: Some(charge_type_path),
                 current_label: Some(display_label(&current)),
                 current: Some(current),
                 supported_modes: Vec::new(),
@@ -333,6 +343,36 @@ fn read_optional_trimmed(path: &Path) -> Result<Option<String>> {
     }
 }
 
+fn battery_health(path: &Path) -> Result<Option<BatteryHealth>> {
+    let capacity_level =
+        read_optional_trimmed(&path.join("capacity_level"))?.filter(|value| !value.is_empty());
+    let health = BatteryHealth {
+        cycle_count: read_optional_trimmed(&path.join("cycle_count"))?
+            .and_then(|value| value.parse::<u32>().ok()),
+        capacity_level,
+        full_energy_microwatt_hours: read_optional_trimmed(&path.join("energy_full"))?
+            .and_then(|value| value.parse::<u64>().ok()),
+        design_energy_microwatt_hours: read_optional_trimmed(&path.join("energy_full_design"))?
+            .and_then(|value| value.parse::<u64>().ok()),
+        full_charge_microamp_hours: read_optional_trimmed(&path.join("charge_full"))?
+            .and_then(|value| value.parse::<u64>().ok()),
+        design_charge_microamp_hours: read_optional_trimmed(&path.join("charge_full_design"))?
+            .and_then(|value| value.parse::<u64>().ok()),
+    };
+
+    if health.cycle_count.is_some()
+        || health.capacity_level.is_some()
+        || health.full_energy_microwatt_hours.is_some()
+        || health.design_energy_microwatt_hours.is_some()
+        || health.full_charge_microamp_hours.is_some()
+        || health.design_charge_microamp_hours.is_some()
+    {
+        Ok(Some(health))
+    } else {
+        Ok(None)
+    }
+}
+
 fn kernel_version() -> Option<String> {
     fs::read_to_string("/proc/sys/kernel/osrelease")
         .ok()
@@ -364,6 +404,10 @@ mod tests {
                 ("power_now", "38300000"),
                 ("manufacturer", "COSMX"),
                 ("model_name", "L24X4PG7"),
+                ("cycle_count", "111"),
+                ("capacity_level", "Normal"),
+                ("energy_full", "79980000"),
+                ("energy_full_design", "85000000"),
                 ("charge_types", "[Fast] Standard Long_Life"),
                 ("charge_type", "Fast"),
             ],
@@ -381,10 +425,96 @@ mod tests {
                 microwatts: 38_300_000
             })
         );
+        assert_eq!(
+            devices[0].health,
+            Some(BatteryHealth {
+                cycle_count: Some(111),
+                capacity_level: Some("Normal".to_string()),
+                full_energy_microwatt_hours: Some(79_980_000),
+                design_energy_microwatt_hours: Some(85_000_000),
+                full_charge_microamp_hours: None,
+                design_charge_microamp_hours: None,
+            })
+        );
+        assert_eq!(
+            devices[0].native_mode.source_path,
+            Some(fixture.path("BAT1/charge_types"))
+        );
         assert_eq!(devices[0].native_mode.current.as_deref(), Some("Fast"));
         assert_eq!(
             raw_modes(&devices[0].native_mode.supported_modes),
             ["Fast", "Standard", "Long_Life"]
+        );
+    }
+
+    #[test]
+    fn discovers_charge_based_health_fields() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[
+                ("type", "Battery"),
+                ("charge_full", "5000000"),
+                ("charge_full_design", "6000000"),
+                ("charge_types", "[Standard]"),
+            ],
+        );
+
+        let device = fixture.sysfs().get_device("BAT1").unwrap();
+
+        assert_eq!(
+            device.health,
+            Some(BatteryHealth {
+                cycle_count: None,
+                capacity_level: None,
+                full_energy_microwatt_hours: None,
+                design_energy_microwatt_hours: None,
+                full_charge_microamp_hours: Some(5_000_000),
+                design_charge_microamp_hours: Some(6_000_000),
+            })
+        );
+    }
+
+    #[test]
+    fn missing_health_fields_are_absent() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[("type", "Battery"), ("charge_types", "[Standard]")],
+        );
+
+        let device = fixture.sysfs().get_device("BAT1").unwrap();
+
+        assert_eq!(device.health, None);
+    }
+
+    #[test]
+    fn unparsable_health_numbers_are_absent() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[
+                ("type", "Battery"),
+                ("cycle_count", "unknown"),
+                ("capacity_level", "Normal"),
+                ("energy_full", "not-a-number"),
+                ("energy_full_design", "85000000"),
+                ("charge_types", "[Standard]"),
+            ],
+        );
+
+        let device = fixture.sysfs().get_device("BAT1").unwrap();
+
+        assert_eq!(
+            device.health,
+            Some(BatteryHealth {
+                cycle_count: None,
+                capacity_level: Some("Normal".to_string()),
+                full_energy_microwatt_hours: None,
+                design_energy_microwatt_hours: Some(85_000_000),
+                full_charge_microamp_hours: None,
+                design_charge_microamp_hours: None,
+            })
         );
     }
 
@@ -453,6 +583,10 @@ mod tests {
         assert!(!device.native_mode.supported);
         assert!(!device.native_mode.writable);
         assert_eq!(device.native_mode.source.as_deref(), Some("charge_type"));
+        assert_eq!(
+            device.native_mode.source_path,
+            Some(fixture.path("BAT1/charge_type"))
+        );
         assert_eq!(device.native_mode.current.as_deref(), Some("Long_Life"));
     }
 
@@ -566,6 +700,36 @@ mod tests {
             diagnostics.informational_attributes[0].name,
             "charge_control_end_threshold"
         );
+    }
+
+    #[test]
+    fn raw_entries_include_health_capacity_attributes() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[
+                ("type", "Battery"),
+                ("cycle_count", "111"),
+                ("capacity_level", "Normal"),
+                ("energy_full", "79980000"),
+                ("energy_full_design", "85000000"),
+                ("charge_full", "5000000"),
+                ("charge_full_design", "6000000"),
+            ],
+        );
+
+        let raw_entries = fixture.sysfs().raw_entries().unwrap();
+        let attributes = &raw_entries[0].attributes;
+
+        assert_eq!(attributes["cycle_count"].as_deref(), Some("111"));
+        assert_eq!(attributes["capacity_level"].as_deref(), Some("Normal"));
+        assert_eq!(attributes["energy_full"].as_deref(), Some("79980000"));
+        assert_eq!(
+            attributes["energy_full_design"].as_deref(),
+            Some("85000000")
+        );
+        assert_eq!(attributes["charge_full"].as_deref(), Some("5000000"));
+        assert_eq!(attributes["charge_full_design"].as_deref(), Some("6000000"));
     }
 
     fn raw_modes(modes: &[NativeMode]) -> Vec<&str> {

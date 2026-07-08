@@ -96,6 +96,21 @@ msgstr "电池侧功率"
 msgid "Not available"
 msgstr "不可用"
 
+msgid "Cycle count"
+msgstr "循环次数"
+
+msgid "Capacity level"
+msgstr "容量级别"
+
+msgid "Full capacity"
+msgstr "当前满充容量"
+
+msgid "Design capacity"
+msgstr "设计容量"
+
+msgid "Battery health"
+msgstr "电池健康度"
+
 msgid "Native mode"
 msgstr "原生模式"
 

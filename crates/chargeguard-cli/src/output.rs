@@ -1,4 +1,6 @@
-use chargeguard_core::{BatteryDevice, ChargeGuardError, Diagnostics, RawPowerSupplyEntry};
+use chargeguard_core::{
+    BatteryDevice, BatteryHealth, ChargeGuardError, Diagnostics, RawPowerSupplyEntry,
+};
 
 use crate::commands::Result;
 
@@ -28,7 +30,7 @@ pub fn print_modes(device: &BatteryDevice) {
     println!("Device: {}", device.id);
     println!(
         "Native mode source: {}",
-        device.native_mode.source.as_deref().unwrap_or("none")
+        native_mode_source_display(device).unwrap_or_else(|| "none".to_string())
     );
 
     if device.native_mode.supported_modes.is_empty() {
@@ -143,8 +145,11 @@ fn print_device(device: &BatteryDevice) {
     }
     println!(
         "Native mode source: {}",
-        device.native_mode.source.as_deref().unwrap_or("none")
+        native_mode_source_display(device).unwrap_or_else(|| "none".to_string())
     );
+    if let Some(health) = &device.health {
+        print_battery_health(health);
+    }
     println!(
         "Current native mode: {}",
         device
@@ -164,6 +169,62 @@ fn print_device(device: &BatteryDevice) {
     println!();
 }
 
+fn native_mode_source_display(device: &BatteryDevice) -> Option<String> {
+    device
+        .native_mode
+        .source_path
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .or_else(|| device.native_mode.source.clone())
+}
+
+fn print_battery_health(health: &BatteryHealth) {
+    if let Some(cycle_count) = health.cycle_count {
+        println!("Cycle count: {cycle_count}");
+    }
+    if let Some(capacity_level) = &health.capacity_level {
+        println!("Capacity level: {capacity_level}");
+    }
+
+    let has_energy = health.full_energy_microwatt_hours.is_some()
+        || health.design_energy_microwatt_hours.is_some();
+    if has_energy {
+        if let Some(full_energy) = health.full_energy_microwatt_hours {
+            println!("Full energy: {}", format_watt_hours(full_energy));
+        }
+        if let Some(design_energy) = health.design_energy_microwatt_hours {
+            println!("Design energy: {}", format_watt_hours(design_energy));
+        }
+        if let Some(percent) = health_percentage(
+            health.full_energy_microwatt_hours,
+            health.design_energy_microwatt_hours,
+        ) {
+            println!("Battery health: {percent:.1}%");
+        }
+        return;
+    }
+
+    if let Some(full_charge) = health.full_charge_microamp_hours {
+        println!("Full charge: {}", format_amp_hours(full_charge));
+    }
+    if let Some(design_charge) = health.design_charge_microamp_hours {
+        println!("Design charge: {}", format_amp_hours(design_charge));
+    }
+    if let Some(percent) = health_percentage(
+        health.full_charge_microamp_hours,
+        health.design_charge_microamp_hours,
+    ) {
+        println!("Battery health: {percent:.1}%");
+    }
+}
+
+fn health_percentage(full: Option<u64>, design: Option<u64>) -> Option<f64> {
+    match (full, design) {
+        (Some(full), Some(design)) if design > 0 => Some(full as f64 * 100.0 / design as f64),
+        _ => None,
+    }
+}
+
 fn format_watts(microwatts: u64) -> String {
     let rounded_tenths = (microwatts + 50_000) / 100_000;
     if rounded_tenths == 0 {
@@ -175,4 +236,28 @@ fn format_watts(microwatts: u64) -> String {
     }
 
     format!("{} W", (rounded_tenths + 5) / 10)
+}
+
+fn format_watt_hours(microwatt_hours: u64) -> String {
+    format_micro_units(microwatt_hours, "Wh")
+}
+
+fn format_amp_hours(microamp_hours: u64) -> String {
+    format_micro_units(microamp_hours, "Ah")
+}
+
+fn format_micro_units(value: u64, unit: &str) -> String {
+    let rounded_hundredths = (value + 5_000) / 10_000;
+    let whole = rounded_hundredths / 100;
+    let fractional = rounded_hundredths % 100;
+
+    if fractional == 0 {
+        return format!("{whole} {unit}");
+    }
+
+    if fractional.is_multiple_of(10) {
+        return format!("{}.{} {unit}", whole, fractional / 10);
+    }
+
+    format!("{whole}.{fractional:02} {unit}")
 }

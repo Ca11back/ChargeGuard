@@ -177,6 +177,13 @@ function capacityDisplay(device) {
     return _('Unknown');
 }
 
+function optionalNumberDisplay(value) {
+    if (typeof value === 'number' && Number.isFinite(value))
+        return `${value}`;
+
+    return _('Not available');
+}
+
 function powerDisplay(device) {
     const microwatts = device?.power?.microwatts;
     if (typeof microwatts !== 'number' || !Number.isFinite(microwatts) || microwatts < 0)
@@ -190,6 +197,83 @@ function powerDisplay(device) {
         return `${Math.floor(roundedTenths / 10)}.${roundedTenths % 10} W`;
 
     return `${Math.round(roundedTenths / 10)} W`;
+}
+
+function isNonNegativeNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function formatMicroUnits(value, unit) {
+    if (!isNonNegativeNumber(value))
+        return null;
+
+    const roundedHundredths = Math.round(value / 10000);
+    const whole = Math.floor(roundedHundredths / 100);
+    const fractional = roundedHundredths % 100;
+
+    if (fractional === 0)
+        return `${whole} ${unit}`;
+
+    if (fractional % 10 === 0)
+        return `${whole}.${Math.floor(fractional / 10)} ${unit}`;
+
+    return `${whole}.${String(fractional).padStart(2, '0')} ${unit}`;
+}
+
+function hasEnergyCapacity(health) {
+    return isNonNegativeNumber(health?.fullEnergyMicrowattHours) ||
+        isNonNegativeNumber(health?.designEnergyMicrowattHours);
+}
+
+function fullCapacityDisplay(health) {
+    if (hasEnergyCapacity(health))
+        return formatMicroUnits(health?.fullEnergyMicrowattHours, 'Wh');
+
+    return formatMicroUnits(health?.fullChargeMicroampHours, 'Ah');
+}
+
+function designCapacityDisplay(health) {
+    if (hasEnergyCapacity(health))
+        return formatMicroUnits(health?.designEnergyMicrowattHours, 'Wh');
+
+    return formatMicroUnits(health?.designChargeMicroampHours, 'Ah');
+}
+
+function healthPercentDisplay(health) {
+    const energyFull = health?.fullEnergyMicrowattHours;
+    const energyDesign = health?.designEnergyMicrowattHours;
+    if (hasEnergyCapacity(health)) {
+        if (isNonNegativeNumber(energyFull) && isNonNegativeNumber(energyDesign) && energyDesign > 0)
+            return `${(energyFull * 100 / energyDesign).toFixed(1)}%`;
+
+        return null;
+    }
+
+    const chargeFull = health?.fullChargeMicroampHours;
+    const chargeDesign = health?.designChargeMicroampHours;
+    if (isNonNegativeNumber(chargeFull) && isNonNegativeNumber(chargeDesign) && chargeDesign > 0)
+        return `${(chargeFull * 100 / chargeDesign).toFixed(1)}%`;
+
+    return null;
+}
+
+function nativeModeSourceDisplay(device) {
+    const sourcePath = device?.nativeMode?.sourcePath;
+    if (typeof sourcePath === 'string' && sourcePath.trim() !== '')
+        return sourcePath;
+
+    const source = device?.nativeMode?.source;
+    if (typeof source !== 'string' || source.trim() === '')
+        return null;
+
+    if (source.startsWith('/'))
+        return source;
+
+    const nativePath = device?.nativePath;
+    if (typeof nativePath === 'string' && nativePath.trim() !== '')
+        return `${nativePath.replace(/\/$/, '')}/${source}`;
+
+    return source;
 }
 
 function supportedRawModesDisplay(device) {
@@ -286,6 +370,11 @@ class ChargeGuardDetailsPage extends Adw.PreferencesPage {
         addValueRow(detailsGroup, _('Status'), valueOrUnknown(device?.status));
         addValueRow(detailsGroup, _('Capacity'), capacityDisplay(device));
         addValueRow(detailsGroup, _('Battery-side power'), powerDisplay(device) ?? _('Not available'));
+        addValueRow(detailsGroup, _('Cycle count'), optionalNumberDisplay(device?.health?.cycleCount));
+        addValueRow(detailsGroup, _('Capacity level'), valueOrUnknown(device?.health?.capacityLevel));
+        addValueRow(detailsGroup, _('Full capacity'), fullCapacityDisplay(device?.health) ?? _('Not available'));
+        addValueRow(detailsGroup, _('Design capacity'), designCapacityDisplay(device?.health) ?? _('Not available'));
+        addValueRow(detailsGroup, _('Battery health'), healthPercentDisplay(device?.health) ?? _('Not available'));
 
         const modeGroup = new Adw.PreferencesGroup({
             title: _('Native mode'),
@@ -293,7 +382,7 @@ class ChargeGuardDetailsPage extends Adw.PreferencesPage {
         addValueRow(modeGroup, _('Current mode'), currentModeLabel(device));
         addValueRow(modeGroup, _('Current raw mode token'), valueOrUnknown(device?.nativeMode?.current));
         addValueRow(modeGroup, _('Supported raw mode tokens'), supportedRawModesDisplay(device));
-        addValueRow(modeGroup, _('Native mode source'), valueOrUnknown(device?.nativeMode?.source));
+        addValueRow(modeGroup, _('Native mode source'), nativeModeSourceDisplay(device) ?? _('Not available'));
 
         const diagnosticsGroup = new Adw.PreferencesGroup({
             title: _('Diagnostics'),

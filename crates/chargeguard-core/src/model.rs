@@ -19,6 +19,7 @@ pub struct NativeMode {
 pub struct NativeModeInfo {
     pub supported: bool,
     pub source: Option<String>,
+    pub source_path: Option<PathBuf>,
     pub current: Option<String>,
     pub current_label: Option<String>,
     pub supported_modes: Vec<NativeMode>,
@@ -31,6 +32,7 @@ impl NativeModeInfo {
         Self {
             supported: false,
             source: None,
+            source_path: None,
             current: None,
             current_label: None,
             supported_modes: Vec::new(),
@@ -48,6 +50,17 @@ pub struct BatteryPower {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BatteryHealth {
+    pub cycle_count: Option<u32>,
+    pub capacity_level: Option<String>,
+    pub full_energy_microwatt_hours: Option<u64>,
+    pub design_energy_microwatt_hours: Option<u64>,
+    pub full_charge_microamp_hours: Option<u64>,
+    pub design_charge_microamp_hours: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BatteryDevice {
     pub id: String,
     pub native_path: PathBuf,
@@ -59,6 +72,7 @@ pub struct BatteryDevice {
     pub manufacturer: Option<String>,
     pub model_name: Option<String>,
     pub power: Option<BatteryPower>,
+    pub health: Option<BatteryHealth>,
     pub native_mode: NativeModeInfo,
 }
 
@@ -133,6 +147,8 @@ mod tests {
         let device: BatteryDevice = serde_json::from_value(value).unwrap();
 
         assert_eq!(device.power, None);
+        assert_eq!(device.health, None);
+        assert_eq!(device.native_mode.source_path, None);
     }
 
     #[test]
@@ -149,9 +165,18 @@ mod tests {
             power: Some(BatteryPower {
                 microwatts: 12_345_678,
             }),
+            health: Some(BatteryHealth {
+                cycle_count: Some(111),
+                capacity_level: Some("Normal".to_string()),
+                full_energy_microwatt_hours: Some(79_980_000),
+                design_energy_microwatt_hours: Some(85_000_000),
+                full_charge_microamp_hours: None,
+                design_charge_microamp_hours: None,
+            }),
             native_mode: NativeModeInfo {
                 supported: true,
                 source: Some("charge_types".to_string()),
+                source_path: Some(PathBuf::from("/tmp/BAT1/charge_types")),
                 current: Some("Long_Life".to_string()),
                 current_label: Some("Long Life".to_string()),
                 supported_modes: vec![NativeMode {
@@ -166,5 +191,10 @@ mod tests {
         let value = serde_json::to_value(device).unwrap();
 
         assert_eq!(value["power"]["microwatts"], 12_345_678);
+        assert_eq!(value["health"]["cycleCount"], 111);
+        assert_eq!(value["health"]["capacityLevel"], "Normal");
+        assert_eq!(value["health"]["fullEnergyMicrowattHours"], 79_980_000);
+        assert_eq!(value["health"]["designEnergyMicrowattHours"], 85_000_000);
+        assert_eq!(value["nativeMode"]["sourcePath"], "/tmp/BAT1/charge_types");
     }
 }
