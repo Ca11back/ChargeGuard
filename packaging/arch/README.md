@@ -26,8 +26,8 @@ CARGO_HOME=/tmp/cargo-home makepkg -f --cleanbuild --noconfirm
 Install the generated packages:
 
 ```bash
-sudo pacman -U ./chargeguard-0.1.0-1-x86_64.pkg.tar.zst \
-  ./gnome-shell-extension-chargeguard-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./chargeguard-0.1.1-1-x86_64.pkg.tar.zst \
+  ./gnome-shell-extension-chargeguard-0.1.1-1-x86_64.pkg.tar.zst
 ```
 
 Run basic hardware checks:

@@ -1,12 +1,12 @@
 # ChargeGuard Release Process
 
-This document describes the first public release flow for maintainers.
+This document describes the release flow for maintainers.
 
 ## Release Artifacts
 
-Required for the first release:
+Required for each release:
 
-- Git tag, for example `v0.1.0`
+- Git tag, for example `v0.1.1`
 - GitHub Release created from that tag
 - GNOME Shell extension zip built by `gnome-extensions pack`
 - SHA-256 checksum file for uploaded release assets
@@ -59,17 +59,17 @@ only when run manually or when a version tag is pushed.
 2. Create and push the version tag:
 
    ```bash
-   git tag v0.1.0
-   git push origin main v0.1.0
+   git tag v0.1.1
+   git push origin main v0.1.1
    ```
 
-3. Ensure `docs/release-notes/v0.1.0.md` exists.
+3. Ensure `docs/release-notes/v0.1.1.md` exists.
 4. Run the `Release` GitHub Actions workflow, or let the tag trigger create a
    draft release.
 5. Review the generated GNOME extension zip, checksum file, and bilingual release notes.
 6. Publish the GitHub Release when the assets are correct.
 
-If a draft release was created from an older `v0.1.0` tag and deleted before
+If a draft release was created from an older tag and deleted before
 publication, either delete and recreate that tag on the final release commit or
 use the next version tag. Do not publish assets from a stale tag.
 
@@ -94,7 +94,7 @@ cp packaging/arch/chargeguard.install /path/to/aur-chargeguard/chargeguard.insta
 cd /path/to/aur-chargeguard
 git diff
 git add PKGBUILD .SRCINFO chargeguard.install
-git commit -m "Release 0.1.0"
+git commit -m "Release 0.1.1"
 git push
 ```
 

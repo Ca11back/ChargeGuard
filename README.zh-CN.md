@@ -2,37 +2,54 @@
 
 [English](README.md) | 简体中文
 
-ChargeGuard（充电守护）把笔记本固件自带的充电模式放到 GNOME Quick Settings 里。如果你的机器已经通过 Linux 暴露了 `Fast`、`Standard`、`Long_Life` 这类模式，ChargeGuard 可以让你直接查看和切换它们，不需要手动记 sysfs 路径，也不需要自己执行特权写入命令。
+ChargeGuard（充电守护）把笔记本固件自带的原生充电模式放进 GNOME Quick
+Settings。它面向已经通过 Linux `power_supply` 暴露 `Fast`、`Standard`、
+`Long_Life` 这类模式的机器。
 
-![ChargeGuard in GNOME Quick Settings](docs/assets/chargeguard-gnome-quick-settings.png)
+Quick Settings tile 会显示当前充电模式，以及电池上报的当前电池侧功率。展开
+tile 后可以切换固件报告的模式，也可以打开电池详情页。
 
-## 它能做什么
+![ChargeGuard Quick Settings tile and menu](docs/assets/chargeguard-gnome-quick-settings.png)
 
-ChargeGuard 面向通过 Linux `power_supply` 接口暴露原生固件充电模式的笔记本电脑。它不会自己发明一套电池养护策略，而是读取机器已经报告的模式列表，把它显示在 GNOME Quick Settings 中，然后请求固件切换到其中一个已报告的模式。换句话说，ChargeGuard 是固件自带控制项的前端，不是软件层模拟出来的充电算法。
+## GNOME 体验
 
-当前实现关注这些原生充电模式属性：
+ChargeGuard 的位置是补充 GNOME 自带的电池图标和电源模式控制，而不是重复它们。
+
+- 顶层 Quick Settings tile 显示当前原生充电模式，例如 `Long Life`，并在可用时显示当前电池侧瓦数。
+- 展开菜单会标识工具归属为 ChargeGuard，显示当前模式/功率摘要，列出可写入的固件模式，并提供 `Details...` 入口。
+- 实际可选模式保留固件报告的原始 token，例如 `Fast`、`Standard`、`Long_Life`。
+
+## 电池详情
+
+详情页用于承载不适合长期占用 Quick Settings 顶层的信息：电池身份、健康信息、当前功率，以及 ChargeGuard 正在使用的 Linux 接口。
+
+![ChargeGuard battery details page](docs/assets/chargeguard-battery-details.png)
+
+如果机器通过 `power_supply` 上报了对应数据，详情页可以显示：
+
+- 当前选中的电池、型号、制造商、状态和电量
+- 来自 `power_now` 的电池侧功率
+- 循环次数和容量等级
+- 满充容量、设计容量和计算出的电池健康度
+- 当前原生模式、当前原始模式 token、支持的原始 token，以及完整的原生模式来源路径
+
+这些字段取决于硬件和内核暴露的 sysfs 属性。缺少可选属性时，ChargeGuard 会显示为不可用，而不是把它当作错误。
+
+## 范围边界
+
+ChargeGuard 是固件原生充电模式的前端。它不会自己发明一套软件充电策略，不替代 GNOME 的电源模式控制，也不是通用的笔记本电源调优工具。
+
+当前支持的原生模式接口是：
 
 ```text
 /sys/class/power_supply/<battery>/charge_types
 /sys/class/power_supply/<battery>/charge_type
 ```
 
-ChargeGuard 只会写入当前设备 `charge_types` 明确报告的模式 token。它不会写入通用百分比阈值，也不会写入旧式厂商私有控制项。
+模式切换会先根据当前电池 `charge_types` 报告的 allow-list 校验。ChargeGuard 不写入
+`charge_control_end_threshold` 这类通用百分比阈值，也不调整 CPU、磁盘、USB、Wi-Fi、platform profile、键盘背光或运行时省电策略。
 
-GNOME 扩展会直接显示固件报告的原生模式名，例如 `Fast`、`Standard` 或 `Long_Life`。这些模式 token 不会被 UI 翻译或重新解释。
-
-## 和 TLP 有什么区别
-
-[TLP](https://linrunner.de/tlp/index.html) 是一个覆盖面更广的笔记本电源管理工具。它可以应用省电配置、调整多种内核电源设置、管理无线和设备电源行为，并且在部分受支持的笔记本上配置电池充电阈值。
-
-ChargeGuard 的范围更窄：
-
-- 它只管理以 `charge_type` / `charge_types` 暴露出来的固件充电模式。
-- 它不调整 CPU、磁盘、USB、Wi-Fi、平台或运行时省电设置。
-- 它不设置 `75%` / `80%` 这类开始/停止充电百分比阈值。
-- 它展示固件自己的模式名，并且只写入当前设备明确报告支持的模式 token。
-
-实际使用上，如果你需要通用省电、性能档位或系统级电源调优，应使用 TLP 或桌面环境的电源配置工具。如果你的笔记本已经有固件自带的充电模式，并且你只是想在 GNOME 里方便切换这些模式，才使用 ChargeGuard。
+需要通用性能/省电策略时，应该使用 TLP、GNOME 电源模式或其他电源管理工具。你的笔记本已经有固件原生充电模式，并且你想把它清晰地接入 GNOME 和 CLI 诊断时，才使用 ChargeGuard。
 
 ## 组件
 
@@ -42,12 +59,7 @@ ChargeGuard 的范围更窄：
 
 ## 安装
 
-计划中的 Arch/AUR package base 会拆分为两个包：
-
-- `chargeguard`
-- `gnome-shell-extension-chargeguard`
-
-AUR 发布后，桌面用户应安装扩展包；它会依赖后端包：
+Arch 桌面用户应安装 GNOME 扩展包；它会依赖后端包：
 
 ```bash
 yay -S gnome-shell-extension-chargeguard
@@ -59,11 +71,12 @@ yay -S gnome-shell-extension-chargeguard
 yay -S chargeguard
 ```
 
-AUR 发布前，维护者可以从当前 checkout 构建 Arch 包。详见 [packaging/arch/README.md](packaging/arch/README.md)。
+维护者可以从当前 checkout 构建 Arch 包。详见
+[packaging/arch/README.md](packaging/arch/README.md)。
 
 ## 启用 GNOME 扩展
 
-首个扩展目标是 GNOME Shell 50。
+扩展目标是 GNOME Shell 50。
 
 安装包后，根据你的会话类型重新加载或重启 GNOME Shell，然后启用扩展：
 
@@ -99,7 +112,7 @@ chargeguard set Long_Life --device BAT1
 
 ## 兼容性
 
-ChargeGuard 当前聚焦具备原生 `charge_type` / `charge_types` 固件模式的笔记本。它不管理 `charge_control_end_threshold` 这类百分比阈值。
+ChargeGuard 当前聚焦具备原生 `charge_type` / `charge_types` 固件模式的笔记本。健康和功率详情取决于每块电池在 `power_supply` 下实际报告的可选属性。
 
 详见 [docs/compatibility.md](docs/compatibility.md)。
 
