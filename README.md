@@ -2,148 +2,171 @@
 
 English | [简体中文](README.zh-CN.md)
 
-ChargeGuard brings your laptop's native battery charging modes into GNOME Quick
-Settings. It is for machines whose firmware already exposes charging modes such
-as `Fast`, `Standard`, or `Long_Life` through Linux `power_supply`.
+Switch the battery charging modes already built into your laptop firmware right
+from GNOME Quick Settings. ChargeGuard also provides focused battery details
+and CLI diagnostics, while leaving general performance and power tuning to the
+tools designed for those jobs.
 
-The Quick Settings tile shows the current charging mode and battery-side power
-when the battery reports it. Expand the tile to switch between firmware-reported
-modes or open the battery details page.
+ChargeGuard is useful only when the Linux kernel exposes firmware-native modes
+such as `Fast`, `Standard`, or `Long_Life`. Support depends on the exact laptop,
+firmware, and kernel driver—not the vendor name alone.
 
-![ChargeGuard Quick Settings tile and menu](docs/assets/chargeguard-gnome-quick-settings.png)
+![ChargeGuard mode switcher in GNOME Quick Settings](docs/assets/chargeguard-gnome-quick-settings.png)
 
-## GNOME Experience
+## What You Get
 
-ChargeGuard is designed to sit beside GNOME's built-in battery indicator and
-power mode control without duplicating them.
+- A GNOME Quick Settings switcher for modes reported by your battery firmware.
+- A battery details view for health, power, identity, and native-mode data when
+  the hardware provides it.
+- A CLI for read-first inspection, local diagnostics, and guarded mode changes.
 
-- The compact Quick Settings tile shows the current native charging mode, such
-  as `Long Life`, plus current battery-side watts when available.
-- The expanded menu identifies the tool as ChargeGuard, shows the current
-  mode/power summary, lists the writable firmware modes, and provides a
-  `Details...` action.
-- The mode list uses raw firmware tokens for the actual choices, such as
-  `Fast`, `Standard`, and `Long_Life`.
+ChargeGuard complements GNOME's battery indicator and Power Modes. It does not
+create charging algorithms, manage percentage thresholds, or tune CPU, disk,
+USB, Wi-Fi, and other system power settings.
 
-## Battery Details
+## Will It Work on My Laptop?
 
-The details page is for information that does not need to occupy the top-level
-Quick Settings surface: battery identity, health, current power, and the exact
-Linux interface ChargeGuard is using.
+Check the kernel interface before installing. This command only reads sysfs; it
+does not change the charging mode:
 
-![ChargeGuard battery details page](docs/assets/chargeguard-battery-details.png)
-
-On machines that report the data through `power_supply`, the page can show:
-
-- selected battery, model, manufacturer, status, and capacity
-- battery-side power from `power_now`
-- cycle count and capacity level
-- full capacity, design capacity, and calculated battery health
-- current native mode, raw mode token, supported raw tokens, and the full native
-  mode source path
-
-These fields are hardware-dependent. Missing optional sysfs attributes are shown
-as unavailable rather than treated as errors.
-
-## Scope
-
-ChargeGuard is a front end for firmware-provided charging modes. It does not
-invent a software charging policy, replace GNOME's power mode control, or act as
-a general laptop power-tuning tool.
-
-The supported native mode interface is:
-
-```text
-/sys/class/power_supply/<battery>/charge_types
-/sys/class/power_supply/<battery>/charge_type
+```bash
+for battery in /sys/class/power_supply/*; do
+  [ -d "$battery" ] || continue
+  [ -r "$battery/type" ] || continue
+  [ "$(cat "$battery/type")" = "Battery" ] || continue
+  echo "== $(basename "$battery") =="
+  for attribute in charge_types charge_type \
+    charge_control_start_threshold charge_control_end_threshold; do
+    if [ -r "$battery/$attribute" ]; then
+      printf '%s: ' "$attribute"
+      cat "$battery/$attribute"
+    fi
+  done
+done
 ```
 
-Mode changes are validated against the battery's current `charge_types`
-allow-list. ChargeGuard does not write generic percentage thresholds such as
-`charge_control_end_threshold`, and it does not tune CPU, disk, USB, Wi-Fi,
-platform profiles, keyboard backlight, or runtime power-saving settings.
+Interpret the result conservatively:
 
-Use TLP, GNOME's power mode control, or another power-management tool for broad
-performance and power-saving policy. Use ChargeGuard when your laptop already
-has firmware charging modes and you want them exposed cleanly in GNOME and CLI
-diagnostics.
+| What you find | ChargeGuard behavior |
+| --- | --- |
+| `charge_types` (with or without a separate `charge_type`) | Native modes can be inspected and are offered for switching. A later write can still fail because of firmware, driver, or authorization behavior. |
+| `charge_type` only | Current mode can be visible, but ChargeGuard treats the device as read-only because it cannot validate a safe list of choices. |
+| Only `charge_control_*_threshold` or similar controls | This is threshold-based charging and is outside ChargeGuard's scope. |
+| None of these files | The laptop is unsupported or its current firmware/kernel does not expose the interface. |
 
-## Components
+See [Compatibility](docs/compatibility.md) for the precise boundary. Do not
+infer support from another model made by the same vendor.
 
-- `chargeguard`: CLI for listing batteries, viewing modes, changing modes, and
-  running diagnostics.
-- `chargeguardd`: privileged system D-Bus service that owns polkit checks and
-  sysfs writes.
-- `gnome-shell-extension-chargeguard`: GNOME Quick Settings extension that talks
-  to the system D-Bus backend.
+## Install on Arch Linux
 
-## Install
-
-Arch users should install the GNOME extension package for the desktop
-experience. It depends on the backend package:
+For the GNOME experience, install the extension package; it depends on the
+backend automatically:
 
 ```bash
 yay -S gnome-shell-extension-chargeguard
 ```
 
-CLI-only users can install the backend package:
+For CLI-only use:
 
 ```bash
 yay -S chargeguard
 ```
 
-Maintainers can build the Arch packages from this checkout. See
-[packaging/arch/README.md](packaging/arch/README.md).
-
-## Enable The GNOME Extension
-
-The extension targets GNOME Shell 50.
-
-After installing the package, reload or restart the GNOME Shell session as
-appropriate for your session type, then enable the extension:
+The extension currently targets GNOME Shell 50. After installation or an
+upgrade, log out and back in if GNOME Wayland has not loaded the new extension,
+then enable it:
 
 ```bash
 gnome-extensions enable chargeguard@github.com
 gnome-extensions info chargeguard@github.com
 ```
 
-The backend is activated through system D-Bus when the CLI or extension queries
-ChargeGuard.
+## Safe Quick Start
 
-## CLI
+Start with inspection. These commands do not change the charging mode:
 
 ```bash
 chargeguard list
 chargeguard current
 chargeguard modes
-chargeguard doctor --json
-chargeguard raw BAT1
+chargeguard doctor
 ```
 
-Only run `set` after confirming the supported modes reported by your machine:
+If more than one battery is present, pass the device shown by `list`, for
+example `chargeguard current BAT1` and `chargeguard modes BAT1`.
+
+In GNOME, open Quick Settings and expand ChargeGuard. The menu shows the current
+mode and the firmware-reported choices. Open **Details...** for battery and
+interface information.
+
+![ChargeGuard battery health and native-mode details](docs/assets/chargeguard-battery-details.png)
+
+Optional fields vary by hardware. Missing health, cycle, power, or identity
+attributes are shown as unavailable; explicit collection failures remain visible
+in diagnostics.
+
+## How ChargeGuard Differs
+
+| Tool | Primary job | Relationship to charging modes |
+| --- | --- | --- |
+| ChargeGuard | GNOME and CLI access to firmware-native `charge_type` / `charge_types` modes | Uses only the raw choices reported by the battery; no percentage-threshold policy |
+| GNOME Power Modes | Select system performance/energy profiles such as power saver or performance | A different control; ChargeGuard does not replace it |
+| TLP | Broad laptop power management and battery-care configuration | May manage battery features on supported hardware; avoid configuring two tools to write the same control |
+| Threshold tools | Set charge start/stop percentages where the driver exposes threshold attributes | A different interface and policy model; ChargeGuard does not manage thresholds |
+
+These tools can coexist when they do not manage the same firmware control. The
+capabilities of TLP and threshold tools remain hardware- and driver-dependent.
+
+## Advanced CLI Use
+
+For a shareable structured diagnostic snapshot, use:
 
 ```bash
-chargeguard set Long_Life --device BAT1
+chargeguard doctor --json
 ```
 
-## Safety Model
+Only use `set` after `modes` has shown the exact raw token for the target
+battery:
 
-- Read operations do not require polkit authorization.
-- Mode changes go through `chargeguardd` and polkit.
-- The daemon writes only native mode tokens that are currently reported by the
-  target battery's `charge_types` file.
-- Devices without an enumerable writable native mode list are reported as
-  unsupported or read-only.
+```bash
+chargeguard modes BAT1
+chargeguard set Long_Life --device BAT1
+chargeguard current BAT1
+```
 
-## Compatibility
+`set` is the only mutating command. The daemon validates the requested token
+against the battery's current reported choices, writes it through the native
+interface, and reads it back. A reported choice is not a guarantee that the
+firmware or driver will accept the later write.
 
-ChargeGuard currently focuses on laptops with native `charge_type` /
-`charge_types` firmware modes. Health and power details depend on the optional
-attributes reported by each battery under `power_supply`.
+Run `man chargeguard` for the complete command, device-selection, diagnostics,
+error, and exit-status reference.
 
-See [docs/compatibility.md](docs/compatibility.md) for details.
+## Safety, Privacy, and Limitations
 
-## Release And AUR Maintenance
+- Inspection commands do not require set-mode polkit authorization. Mode
+  changes go through the privileged `chargeguardd` service and polkit.
+- ChargeGuard writes only exact native mode tokens currently reported for the
+  selected battery. It does not write generic percentage thresholds.
+- ChargeGuard has no telemetry and does not transmit diagnostics. `doctor` and
+  `raw` output can contain device identifiers, model data, sysfs paths, and
+  driver-provided values, so review it before sharing.
+- Hardware fields, mode names, write behavior, and support can change with
+  firmware or kernel updates. Multi-battery systems require explicit selection.
 
-See [docs/release.md](docs/release.md) for the maintainer release flow, GitHub
-Release artifacts, and AUR publication steps.
+## Troubleshooting and Further Reading
+
+- No mode switcher or an unsupported/read-only result: rerun the preflight and
+  read [Compatibility](docs/compatibility.md).
+- More than one battery: use the device ID from `chargeguard list` with
+  `current`, `modes`, `raw`, or `set --device`.
+- Failed inspection: run `chargeguard doctor` and keep its explicit failure
+  entries when reporting the problem.
+- Extension missing after installation: verify GNOME Shell 50, log out and back
+  in on Wayland, then check `gnome-extensions info chargeguard@github.com`.
+- System design and privilege boundaries: [Architecture](docs/architecture.md).
+- Bugs and support requests: [GitHub Issues](https://github.com/Ca11back/ChargeGuard/issues).
+
+Maintainer and packaging procedures are intentionally outside this user guide:
+[release runbook](https://github.com/Ca11back/ChargeGuard/blob/main/docs/release.md)
+and [Arch package notes](https://github.com/Ca11back/ChargeGuard/blob/main/packaging/arch/README.md).

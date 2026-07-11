@@ -1,6 +1,7 @@
-# ChargeGuard Release Process
+# ChargeGuard Maintainer and Release-Agent Runbook
 
-This document describes the release flow for maintainers.
+This document describes the release flow for the repository's solo maintainer
+and authorized release agents. It is not an end-user installation guide.
 
 ## Release Artifacts
 
@@ -85,17 +86,29 @@ use the next version tag. Do not publish assets from a stale tag.
 
 ## AUR
 
-The preferred AUR path is the manual `AUR Publish` GitHub Actions workflow.
-Configure the `aur-publish` environment with required reviewers, then add an
-`AUR_SSH_PRIVATE_KEY` secret for an AUR account that can push the
-`chargeguard` package base. Optionally add `AUR_KNOWN_HOSTS` to pin the AUR SSH
-host key; otherwise the workflow uses `ssh-keyscan` at runtime.
+The preferred AUR path is the manual `AUR Publish` GitHub Actions workflow. In
+the current solo-maintainer model, only the repository owner performs an AUR
+publication. This is an operating rule, not an owner check enforced by the
+workflow YAML. Keep the externally configured `aur-publish` environment
+restricted to `main`, and add an `AUR_SSH_PRIVATE_KEY` environment secret for
+an AUR account that can push the `chargeguard` package base. Optionally add
+`AUR_KNOWN_HOSTS` to pin the AUR SSH host key; otherwise the workflow uses
+`ssh-keyscan` at runtime.
 
 Run the workflow with:
 
 - `tag`: the release tag, for example `v0.1.1`
 - `package_base`: `chargeguard`
-- `dry_run`: `true` first, then `false` after reviewing the generated diff
+- `dry_run=true` for the first run
+
+Inspect the dry-run log and generated diff, confirm that the tag and package
+version are the intended release, and only then explicitly run the workflow
+again with the same inputs and `dry_run=false`.
+
+This second owner confirmation is a deliberate publish gate, but it is not
+independent review. If the project gains additional maintainers, revisit the
+environment protection model and add reviewer requirements appropriate to the
+new ownership structure.
 
 The workflow checks out the release tag, copies `PKGBUILD` and
 `chargeguard.install`, regenerates checksums from the published GitHub tag

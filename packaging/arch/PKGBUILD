@@ -48,14 +48,18 @@ package_chargeguard() {
   install -Dm644 "docs/chargeguard.1" \
     "${pkgdir}/usr/share/man/man1/chargeguard.1"
 
-  install -Dm644 "docs/architecture.md" \
-    "${pkgdir}/usr/share/doc/chargeguard/architecture.md"
-  install -Dm644 "docs/compatibility.md" \
-    "${pkgdir}/usr/share/doc/chargeguard/compatibility.md"
   install -Dm644 "README.md" \
     "${pkgdir}/usr/share/doc/chargeguard/README.md"
   install -Dm644 "README.zh-CN.md" \
     "${pkgdir}/usr/share/doc/chargeguard/README.zh-CN.md"
+  install -Dm644 "docs/architecture.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/docs/architecture.md"
+  install -Dm644 "docs/compatibility.md" \
+    "${pkgdir}/usr/share/doc/chargeguard/docs/compatibility.md"
+  install -Dm644 "docs/assets/chargeguard-gnome-quick-settings.png" \
+    "${pkgdir}/usr/share/doc/chargeguard/docs/assets/chargeguard-gnome-quick-settings.png"
+  install -Dm644 "docs/assets/chargeguard-battery-details.png" \
+    "${pkgdir}/usr/share/doc/chargeguard/docs/assets/chargeguard-battery-details.png"
   install -Dm644 "LICENSE" \
     "${pkgdir}/usr/share/licenses/chargeguard/LICENSE"
 }
