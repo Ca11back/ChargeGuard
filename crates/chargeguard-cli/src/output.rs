@@ -1,5 +1,6 @@
 use chargeguard_core::{
-    BatteryDevice, BatteryHealth, ChargeGuardError, Diagnostics, RawPowerSupplyEntry,
+    BatteryDevice, BatteryHealth, ChargeGuardError, DiagnosticFailure, Diagnostics,
+    RawPowerSupplyEntry,
 };
 
 use crate::commands::Result;
@@ -105,6 +106,8 @@ pub fn print_diagnostics(diagnostics: &Diagnostics) {
             );
         }
     }
+
+    print_diagnostic_failures(&diagnostics.failures);
 }
 
 pub fn print_raw(diagnostics: &Diagnostics, device: Option<&str>) -> Result<()> {
@@ -115,6 +118,9 @@ pub fn print_raw(diagnostics: &Diagnostics, device: Option<&str>) -> Result<()> 
         .collect();
 
     if entries.is_empty() {
+        if let Some(failure) = relevant_failures(diagnostics, device).next() {
+            return Err(failure.into());
+        }
         return Err(ChargeGuardError::UnsupportedDevice(
             device.unwrap_or("no power_supply entries").to_string(),
         )
@@ -129,7 +135,53 @@ pub fn print_raw(diagnostics: &Diagnostics, device: Option<&str>) -> Result<()> 
         }
     }
 
+    let failures: Vec<&DiagnosticFailure> = relevant_failures(diagnostics, device).collect();
+    if !failures.is_empty() {
+        println!("Diagnostic issues affecting raw data:");
+        for failure in failures {
+            println!("  {}", format_diagnostic_failure(failure));
+        }
+    }
+
     Ok(())
+}
+
+fn relevant_failures<'a>(
+    diagnostics: &'a Diagnostics,
+    device: Option<&'a str>,
+) -> impl Iterator<Item = &'a DiagnosticFailure> {
+    diagnostics.failures.iter().filter(move |failure| {
+        device.is_none_or(|id| {
+            failure.device_id.is_none() || failure.device_id.as_deref() == Some(id)
+        })
+    })
+}
+
+fn print_diagnostic_failures(failures: &[DiagnosticFailure]) {
+    if failures.is_empty() {
+        return;
+    }
+
+    println!("Diagnostic issues: {}", failures.len());
+    for failure in failures {
+        println!("  {}", format_diagnostic_failure(failure));
+    }
+}
+
+fn format_diagnostic_failure(failure: &DiagnosticFailure) -> String {
+    let mut context = format!(
+        "{} [{}] {}",
+        failure.stage.as_str(),
+        failure.code,
+        failure.path.display()
+    );
+    if let Some(device_id) = &failure.device_id {
+        context.push_str(&format!(" device={device_id}"));
+    }
+    if let Some(attribute) = &failure.attribute {
+        context.push_str(&format!(" attribute={attribute}"));
+    }
+    format!("{context}: {}", failure.message)
 }
 
 fn print_device(device: &BatteryDevice) {
@@ -260,4 +312,101 @@ fn format_micro_units(value: u64, unit: &str) -> String {
     }
 
     format!("{whole}.{fractional:02} {unit}")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use chargeguard_core::{DiagnosticStage, Diagnostics};
+
+    use super::*;
+
+    #[test]
+    fn doctor_failure_line_contains_structured_context() {
+        let failure = test_failure();
+
+        let rendered = format_diagnostic_failure(&failure);
+
+        assert!(rendered.contains("read_attribute [sysfs_read_failed]"));
+        assert!(rendered.contains("device=BAT1"));
+        assert!(rendered.contains("attribute=status"));
+        assert!(rendered.contains("failed to read status"));
+    }
+
+    #[test]
+    fn raw_reports_collection_failure_instead_of_unsupported_device() {
+        let mut diagnostics = empty_diagnostics();
+        diagnostics.failures.push(DiagnosticFailure {
+            stage: DiagnosticStage::CollectRawEntries,
+            device_id: None,
+            path: PathBuf::from("/missing/power_supply"),
+            attribute: None,
+            code: "sysfs_read_failed".to_string(),
+            message: "failed to read /missing/power_supply".to_string(),
+        });
+
+        let error = print_raw(&diagnostics, None).unwrap_err();
+
+        assert_eq!(error.code(), "sysfs_read_failed");
+    }
+
+    #[test]
+    fn raw_true_absence_remains_unsupported_device() {
+        let error = print_raw(&empty_diagnostics(), Some("BAT9")).unwrap_err();
+
+        assert_eq!(error.code(), "unsupported_device");
+    }
+
+    #[test]
+    fn raw_unrelated_device_failure_does_not_mask_true_absence() {
+        let mut diagnostics = empty_diagnostics();
+        diagnostics.failures.push(test_failure());
+
+        let error = print_raw(&diagnostics, Some("BAT9")).unwrap_err();
+
+        assert_eq!(error.code(), "unsupported_device");
+    }
+
+    #[test]
+    fn raw_root_failure_applies_to_any_requested_device() {
+        let mut diagnostics = empty_diagnostics();
+        diagnostics.failures.push(DiagnosticFailure {
+            stage: DiagnosticStage::CollectRawEntries,
+            device_id: None,
+            path: PathBuf::from("/missing/power_supply"),
+            attribute: None,
+            code: "sysfs_read_failed".to_string(),
+            message: "failed to read /missing/power_supply".to_string(),
+        });
+
+        let error = print_raw(&diagnostics, Some("BAT9")).unwrap_err();
+
+        assert_eq!(error.code(), "sysfs_read_failed");
+    }
+
+    fn test_failure() -> DiagnosticFailure {
+        DiagnosticFailure {
+            stage: DiagnosticStage::ReadAttribute,
+            device_id: Some("BAT1".to_string()),
+            path: PathBuf::from("/tmp/power_supply/BAT1/status"),
+            attribute: Some("status".to_string()),
+            code: "sysfs_read_failed".to_string(),
+            message: "failed to read status".to_string(),
+        }
+    }
+
+    fn empty_diagnostics() -> Diagnostics {
+        Diagnostics {
+            version: "0.1.0".to_string(),
+            kernel_version: None,
+            power_supply_root: PathBuf::from("/tmp/power_supply"),
+            devices: Vec::new(),
+            raw_entries: Vec::new(),
+            informational_attributes: Vec::new(),
+            service_status: Some("available".to_string()),
+            polkit_available: Some(true),
+            failures: Vec::new(),
+        }
+    }
 }

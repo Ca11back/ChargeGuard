@@ -95,6 +95,35 @@ pub struct ObservedAttribute {
     pub value: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticStage {
+    CollectRawEntries,
+    ReadAttribute,
+    DiscoverDevices,
+}
+
+impl DiagnosticStage {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::CollectRawEntries => "collect_raw_entries",
+            Self::ReadAttribute => "read_attribute",
+            Self::DiscoverDevices => "discover_devices",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticFailure {
+    pub stage: DiagnosticStage,
+    pub device_id: Option<String>,
+    pub path: PathBuf,
+    pub attribute: Option<String>,
+    pub code: String,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Diagnostics {
@@ -106,6 +135,8 @@ pub struct Diagnostics {
     pub informational_attributes: Vec<ObservedAttribute>,
     pub service_status: Option<String>,
     pub polkit_available: Option<bool>,
+    #[serde(default)]
+    pub failures: Vec<DiagnosticFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,5 +227,44 @@ mod tests {
         assert_eq!(value["health"]["fullEnergyMicrowattHours"], 79_980_000);
         assert_eq!(value["health"]["designEnergyMicrowattHours"], 85_000_000);
         assert_eq!(value["nativeMode"]["sourcePath"], "/tmp/BAT1/charge_types");
+    }
+
+    #[test]
+    fn diagnostics_without_failures_field_deserializes_as_success() {
+        let value = json!({
+            "version": "0.1.0",
+            "kernelVersion": null,
+            "powerSupplyRoot": "/tmp/power_supply",
+            "devices": [],
+            "rawEntries": [],
+            "informationalAttributes": [],
+            "serviceStatus": "available",
+            "polkitAvailable": true
+        });
+
+        let diagnostics: Diagnostics = serde_json::from_value(value).unwrap();
+        let current = serde_json::to_value(&diagnostics).unwrap();
+
+        assert!(diagnostics.failures.is_empty());
+        assert_eq!(current["failures"], json!([]));
+    }
+
+    #[test]
+    fn diagnostic_failure_round_trips_with_structured_context() {
+        let failure = DiagnosticFailure {
+            stage: DiagnosticStage::ReadAttribute,
+            device_id: Some("BAT1".to_string()),
+            path: PathBuf::from("/tmp/power_supply/BAT1/status"),
+            attribute: Some("status".to_string()),
+            code: "sysfs_read_failed".to_string(),
+            message: "failed to read status".to_string(),
+        };
+
+        let value = serde_json::to_value(&failure).unwrap();
+        let decoded: DiagnosticFailure = serde_json::from_value(value.clone()).unwrap();
+
+        assert_eq!(value["stage"], "read_attribute");
+        assert_eq!(value["deviceId"], "BAT1");
+        assert_eq!(decoded, failure);
     }
 }

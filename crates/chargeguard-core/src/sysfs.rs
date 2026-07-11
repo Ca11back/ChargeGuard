@@ -8,8 +8,8 @@ use crate::{
     device::PowerSupply,
     error::{ChargeGuardError, Result},
     model::{
-        BatteryDevice, BatteryHealth, BatteryPower, Diagnostics, NativeModeInfo, ObservedAttribute,
-        RawPowerSupplyEntry,
+        BatteryDevice, BatteryHealth, BatteryPower, DiagnosticFailure, DiagnosticStage,
+        Diagnostics, NativeModeInfo, ObservedAttribute, RawPowerSupplyEntry,
     },
     parser::{display_label, normalize_mode, parse_charge_types},
 };
@@ -64,8 +64,7 @@ impl SysfsPowerSupply {
     }
 
     pub fn diagnostics(&self, version: impl Into<String>) -> Diagnostics {
-        let devices = self.discover_devices().unwrap_or_default();
-        let raw_entries = self.raw_entries().unwrap_or_default();
+        let (devices, raw_entries, failures) = self.diagnostic_entries();
         let mut informational_attributes = Vec::new();
         for entry in &raw_entries {
             for name in NON_MVP_INFORMATIONAL_ATTRIBUTES {
@@ -88,7 +87,161 @@ impl SysfsPowerSupply {
             informational_attributes,
             service_status: None,
             polkit_available: None,
+            failures,
         }
+    }
+
+    fn diagnostic_entries(
+        &self,
+    ) -> (
+        Vec<BatteryDevice>,
+        Vec<RawPowerSupplyEntry>,
+        Vec<DiagnosticFailure>,
+    ) {
+        let entries = match fs::read_dir(&self.root) {
+            Ok(entries) => entries,
+            Err(source) => {
+                let error = ChargeGuardError::SysfsReadFailed {
+                    path: self.root.clone(),
+                    source,
+                };
+                return (
+                    Vec::new(),
+                    Vec::new(),
+                    vec![diagnostic_failure(
+                        DiagnosticStage::CollectRawEntries,
+                        None,
+                        self.root.clone(),
+                        None,
+                        error,
+                    )],
+                );
+            }
+        };
+
+        let mut devices = Vec::new();
+        let mut raw_entries = Vec::new();
+        let mut failures = Vec::new();
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(source) => {
+                    let error = ChargeGuardError::SysfsReadFailed {
+                        path: self.root.clone(),
+                        source,
+                    };
+                    failures.push(diagnostic_failure(
+                        DiagnosticStage::CollectRawEntries,
+                        None,
+                        self.root.clone(),
+                        None,
+                        error,
+                    ));
+                    continue;
+                }
+            };
+            let path = entry.path();
+            match fs::metadata(&path) {
+                Ok(metadata) if metadata.is_dir() => {}
+                Ok(_) => continue,
+                Err(source) => {
+                    let error = ChargeGuardError::SysfsReadFailed {
+                        path: path.clone(),
+                        source,
+                    };
+                    failures.push(diagnostic_failure(
+                        DiagnosticStage::CollectRawEntries,
+                        Some(entry.file_name().to_string_lossy().into_owned()),
+                        path,
+                        None,
+                        error,
+                    ));
+                    continue;
+                }
+            }
+
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let mut attributes = BTreeMap::new();
+            for attr in RAW_ATTRIBUTES {
+                let attribute_path = path.join(attr);
+                let value = match read_optional_trimmed(&attribute_path) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        failures.push(diagnostic_failure(
+                            DiagnosticStage::ReadAttribute,
+                            Some(id.clone()),
+                            attribute_path,
+                            Some((*attr).to_string()),
+                            error,
+                        ));
+                        None
+                    }
+                };
+                attributes.insert((*attr).to_string(), value);
+            }
+
+            let raw_entry = RawPowerSupplyEntry {
+                id: id.clone(),
+                path: path.clone(),
+                type_name: attributes.get("type").cloned().flatten(),
+                present: attributes
+                    .get("present")
+                    .cloned()
+                    .flatten()
+                    .map(|value| value != "0"),
+                attributes,
+            };
+
+            match device_from_raw_entry(&raw_entry) {
+                Ok(Some(device)) => devices.push(device),
+                Ok(None) => {}
+                Err(error) => failures.push(diagnostic_failure(
+                    DiagnosticStage::DiscoverDevices,
+                    Some(id),
+                    error_path(&error).unwrap_or_else(|| path.clone()),
+                    error_attribute(&error),
+                    error,
+                )),
+            }
+            raw_entries.push(raw_entry);
+        }
+
+        devices.sort_by(|left, right| left.id.cmp(&right.id));
+        raw_entries.sort_by(|left, right| left.id.cmp(&right.id));
+        failures.sort_by(|left, right| {
+            (
+                left.stage,
+                &left.device_id,
+                &left.path,
+                &left.attribute,
+                &left.code,
+                &left.message,
+            )
+                .cmp(&(
+                    right.stage,
+                    &right.device_id,
+                    &right.path,
+                    &right.attribute,
+                    &right.code,
+                    &right.message,
+                ))
+        });
+        failures.dedup_by(|left, right| {
+            (
+                left.stage,
+                &left.device_id,
+                &left.path,
+                &left.attribute,
+                &left.code,
+            ) == (
+                right.stage,
+                &right.device_id,
+                &right.path,
+                &right.attribute,
+                &right.code,
+            )
+        });
+        (devices, raw_entries, failures)
     }
 
     pub fn raw_entries(&self) -> Result<Vec<RawPowerSupplyEntry>> {
@@ -341,6 +494,142 @@ fn read_optional_trimmed(path: &Path) -> Result<Option<String>> {
             source,
         }),
     }
+}
+
+fn device_from_raw_entry(entry: &RawPowerSupplyEntry) -> Result<Option<BatteryDevice>> {
+    let Some(type_name) = raw_value(entry, "type") else {
+        return Ok(None);
+    };
+    if type_name != "Battery" {
+        return Ok(None);
+    }
+
+    let present = raw_value(entry, "present").is_none_or(|value| value != "0");
+    if !present {
+        return Ok(None);
+    }
+
+    let native_mode = native_mode_from_raw_entry(entry)?;
+    let health = BatteryHealth {
+        cycle_count: raw_value(entry, "cycle_count").and_then(|value| value.parse().ok()),
+        capacity_level: raw_value(entry, "capacity_level")
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned),
+        full_energy_microwatt_hours: raw_value(entry, "energy_full")
+            .and_then(|value| value.parse().ok()),
+        design_energy_microwatt_hours: raw_value(entry, "energy_full_design")
+            .and_then(|value| value.parse().ok()),
+        full_charge_microamp_hours: raw_value(entry, "charge_full")
+            .and_then(|value| value.parse().ok()),
+        design_charge_microamp_hours: raw_value(entry, "charge_full_design")
+            .and_then(|value| value.parse().ok()),
+    };
+    let health = (health.cycle_count.is_some()
+        || health.capacity_level.is_some()
+        || health.full_energy_microwatt_hours.is_some()
+        || health.design_energy_microwatt_hours.is_some()
+        || health.full_charge_microamp_hours.is_some()
+        || health.design_charge_microamp_hours.is_some())
+    .then_some(health);
+
+    Ok(Some(BatteryDevice {
+        id: entry.id.clone(),
+        native_path: entry.path.clone(),
+        type_name: type_name.to_string(),
+        present,
+        status: raw_value(entry, "status").map(ToOwned::to_owned),
+        capacity: raw_value(entry, "capacity").and_then(|value| value.parse().ok()),
+        manufacturer: raw_value(entry, "manufacturer").map(ToOwned::to_owned),
+        model_name: raw_value(entry, "model_name").map(ToOwned::to_owned),
+        power: raw_value(entry, "power_now")
+            .and_then(|value| value.parse().ok())
+            .map(|microwatts| BatteryPower { microwatts }),
+        health,
+        native_mode,
+    }))
+}
+
+fn native_mode_from_raw_entry(entry: &RawPowerSupplyEntry) -> Result<NativeModeInfo> {
+    if let Some(raw_charge_types) = raw_value(entry, "charge_types") {
+        let charge_types_path = entry.path.join("charge_types");
+        let parsed = parse_charge_types(raw_charge_types).map_err(|message| {
+            ChargeGuardError::ParseNativeModes {
+                path: charge_types_path.clone(),
+                message,
+            }
+        })?;
+        return Ok(NativeModeInfo {
+            supported: true,
+            source: Some("charge_types".to_string()),
+            source_path: Some(charge_types_path),
+            current_label: parsed.active_raw.as_deref().map(display_label),
+            current: parsed.active_raw,
+            supported_modes: parsed.modes,
+            // This projection is built from one diagnostic snapshot. A successfully
+            // read charge_types attribute already proves that the native mode
+            // interface exists, so do not probe sysfs a second time here.
+            writable: true,
+            message: None,
+        });
+    }
+
+    if let Some(current) = raw_value(entry, "charge_type") {
+        return Ok(NativeModeInfo {
+            supported: false,
+            source: Some("charge_type".to_string()),
+            source_path: Some(entry.path.join("charge_type")),
+            current: Some(current.to_string()),
+            current_label: Some(display_label(current)),
+            supported_modes: Vec::new(),
+            writable: false,
+            message: Some(format!(
+                "Device '{}' exposes current native mode but not enumerable writable modes",
+                entry.id
+            )),
+        });
+    }
+
+    Ok(NativeModeInfo::unsupported(format!(
+        "Device '{}' does not expose charge_types or charge_type",
+        entry.id
+    )))
+}
+
+fn raw_value<'a>(entry: &'a RawPowerSupplyEntry, name: &str) -> Option<&'a str> {
+    entry.attributes.get(name)?.as_deref()
+}
+
+fn diagnostic_failure(
+    stage: DiagnosticStage,
+    device_id: Option<String>,
+    path: PathBuf,
+    attribute: Option<String>,
+    error: ChargeGuardError,
+) -> DiagnosticFailure {
+    DiagnosticFailure {
+        stage,
+        device_id,
+        path,
+        attribute,
+        code: error.code().to_string(),
+        message: error.to_string(),
+    }
+}
+
+fn error_path(error: &ChargeGuardError) -> Option<PathBuf> {
+    match error {
+        ChargeGuardError::ParseNativeModes { path, .. }
+        | ChargeGuardError::SysfsReadFailed { path, .. }
+        | ChargeGuardError::SysfsWriteFailed { path, .. } => Some(path.clone()),
+        _ => None,
+    }
+}
+
+fn error_attribute(error: &ChargeGuardError) -> Option<String> {
+    error_path(error).and_then(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    })
 }
 
 fn battery_health(path: &Path) -> Result<Option<BatteryHealth>> {
@@ -699,6 +988,138 @@ mod tests {
         assert_eq!(
             diagnostics.informational_attributes[0].name,
             "charge_control_end_threshold"
+        );
+        assert!(diagnostics.failures.is_empty());
+    }
+
+    #[test]
+    fn diagnostics_distinguish_empty_root_from_missing_root() {
+        let fixture = Fixture::new();
+        let empty = fixture.sysfs().diagnostics("0.1.0");
+        let missing = SysfsPowerSupply::new(fixture.path("missing")).diagnostics("0.1.0");
+
+        assert!(empty.devices.is_empty());
+        assert!(empty.raw_entries.is_empty());
+        assert!(empty.failures.is_empty());
+        assert!(missing.devices.is_empty());
+        assert!(missing.raw_entries.is_empty());
+        assert_eq!(missing.failures.len(), 1);
+        assert_eq!(
+            missing.failures[0].stage,
+            DiagnosticStage::CollectRawEntries
+        );
+        assert_eq!(missing.failures[0].code, "sysfs_read_failed");
+        assert_eq!(missing.failures[0].path, fixture.path("missing"));
+    }
+
+    #[test]
+    fn diagnostics_preserve_entry_when_one_attribute_cannot_be_read() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT1",
+            &[("type", "Battery"), ("charge_types", "[Standard]")],
+        );
+        fs::create_dir(fixture.path("BAT1/status")).unwrap();
+
+        let diagnostics = fixture.sysfs().diagnostics("0.1.0");
+
+        assert_eq!(diagnostics.devices.len(), 1);
+        assert_eq!(diagnostics.raw_entries.len(), 1);
+        assert_eq!(diagnostics.raw_entries[0].attributes["status"], None);
+        assert_eq!(diagnostics.failures.len(), 1);
+        assert_eq!(
+            diagnostics.failures[0].stage,
+            DiagnosticStage::ReadAttribute
+        );
+        assert_eq!(diagnostics.failures[0].device_id.as_deref(), Some("BAT1"));
+        assert_eq!(diagnostics.failures[0].attribute.as_deref(), Some("status"));
+        assert_eq!(diagnostics.failures[0].code, "sysfs_read_failed");
+    }
+
+    #[test]
+    fn diagnostics_preserve_good_devices_and_raw_malformed_modes() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT0",
+            &[("type", "Battery"), ("charge_types", "[Standard]")],
+        );
+        fixture.battery(
+            "BAT1",
+            &[("type", "Battery"), ("charge_types", "Fast [Long Life")],
+        );
+
+        let diagnostics = fixture.sysfs().diagnostics("0.1.0");
+
+        assert_eq!(diagnostics.devices.len(), 1);
+        assert_eq!(diagnostics.devices[0].id, "BAT0");
+        assert_eq!(diagnostics.raw_entries.len(), 2);
+        assert_eq!(
+            diagnostics.raw_entries[1].attributes["charge_types"].as_deref(),
+            Some("Fast [Long Life")
+        );
+        assert_eq!(diagnostics.failures.len(), 1);
+        assert_eq!(
+            diagnostics.failures[0].stage,
+            DiagnosticStage::DiscoverDevices
+        );
+        assert_eq!(diagnostics.failures[0].device_id.as_deref(), Some("BAT1"));
+        assert_eq!(
+            diagnostics.failures[0].attribute.as_deref(),
+            Some("charge_types")
+        );
+        assert_eq!(diagnostics.failures[0].code, "internal_error");
+    }
+
+    #[test]
+    fn diagnostics_failures_have_deterministic_stage_device_and_path_order() {
+        let fixture = Fixture::new();
+        fixture.battery(
+            "BAT9",
+            &[("type", "Battery"), ("charge_types", "Fast [Long Life")],
+        );
+        fixture.battery(
+            "BAT1",
+            &[("type", "Battery"), ("charge_types", "[Standard]")],
+        );
+        fs::create_dir(fixture.path("BAT1/status")).unwrap();
+        fs::create_dir(fixture.path("BAT1/capacity")).unwrap();
+
+        let diagnostics = fixture.sysfs().diagnostics("0.1.0");
+        let identities: Vec<_> = diagnostics
+            .failures
+            .iter()
+            .map(|failure| {
+                (
+                    failure.stage.as_str(),
+                    failure.device_id.as_deref(),
+                    failure.attribute.as_deref(),
+                    failure.code.as_str(),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            identities,
+            [
+                (
+                    "read_attribute",
+                    Some("BAT1"),
+                    Some("capacity"),
+                    "sysfs_read_failed"
+                ),
+                (
+                    "read_attribute",
+                    Some("BAT1"),
+                    Some("status"),
+                    "sysfs_read_failed"
+                ),
+                (
+                    "discover_devices",
+                    Some("BAT9"),
+                    Some("charge_types"),
+                    "internal_error"
+                ),
+            ]
         );
     }
 

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use chargeguard_core::{
-    BatteryDevice, ChargeGuardError, Diagnostics, INTERFACE_NAME, OBJECT_PATH, SERVICE_NAME,
+    BatteryDevice, ChargeGuardError, DiagnosticFailure, Diagnostics, INTERFACE_NAME, OBJECT_PATH,
+    SERVICE_NAME,
 };
 use clap::{Parser, Subcommand};
 use serde::de::DeserializeOwned;
@@ -165,6 +166,9 @@ pub enum CliError {
 
     #[error("{0}")]
     Protocol(String),
+
+    #[error("{message}")]
+    DiagnosticFailure { code: &'static str, message: String },
 }
 
 impl CliError {
@@ -174,7 +178,33 @@ impl CliError {
             CliError::Zbus(error) => code_from_zbus_error(error),
             CliError::Protocol(_) | CliError::Zvariant(_) | CliError::Json(_) => "internal_error",
             CliError::AmbiguousDevice => "ambiguous_device",
+            CliError::DiagnosticFailure { code, .. } => code,
         }
+    }
+}
+
+impl From<&DiagnosticFailure> for CliError {
+    fn from(failure: &DiagnosticFailure) -> Self {
+        Self::DiagnosticFailure {
+            code: stable_diagnostic_code(&failure.code),
+            message: failure.message.clone(),
+        }
+    }
+}
+
+fn stable_diagnostic_code(code: &str) -> &'static str {
+    match code {
+        "unsupported_device" => "unsupported_device",
+        "no_native_mode_interface" => "no_native_mode_interface",
+        "native_modes_not_enumerable" => "native_modes_not_enumerable",
+        "invalid_mode" => "invalid_mode",
+        "permission_denied" => "permission_denied",
+        "sysfs_read_failed" => "sysfs_read_failed",
+        "sysfs_write_failed" => "sysfs_write_failed",
+        "readback_mismatch" => "readback_mismatch",
+        "service_unavailable" => "service_unavailable",
+        "internal_error" => "internal_error",
+        _ => "internal_error",
     }
 }
 
@@ -292,6 +322,23 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(format_error(&error), expected);
         }
+    }
+
+    #[test]
+    fn unknown_diagnostic_codes_are_not_promoted_to_public_codes() {
+        let failure = DiagnosticFailure {
+            stage: chargeguard_core::DiagnosticStage::DiscoverDevices,
+            device_id: Some("BAT0".to_string()),
+            path: PathBuf::from("/sys/class/power_supply/BAT0"),
+            attribute: None,
+            code: "future_remote_code".to_string(),
+            message: "future failure".to_string(),
+        };
+
+        let error = CliError::from(&failure);
+
+        assert_eq!(error.code(), "internal_error");
+        assert_eq!(format_error(&error), "internal_error: future failure");
     }
 
     #[test]
