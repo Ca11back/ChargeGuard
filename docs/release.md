@@ -33,10 +33,20 @@ cargo fmt --all --check
 cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 python3 -m json.tool gnome-extension/metadata.json
+node --input-type=module --check < gnome-extension/extension.js
+node --input-type=module --check < gnome-extension/prefs.js
+node --input-type=module --check < gnome-extension/protocol.js
+node --input-type=module --check < gnome-extension/error-contract.js
+node tests/gnome-error-contract.test.js
 mkdir -p /tmp/chargeguard-extension-pack
 msgfmt -c -o /tmp/chargeguard.mo gnome-extension/po/zh_CN.po
 gnome-extensions pack --force --podir=po --gettext-domain=chargeguard \
+  --extra-source=protocol.js --extra-source=error-contract.js \
   --out-dir=/tmp/chargeguard-extension-pack gnome-extension
+archive=/tmp/chargeguard-extension-pack/chargeguard@github.com.shell-extension.zip
+for file in metadata.json extension.js prefs.js protocol.js error-contract.js; do
+  bsdtar -tf "$archive" | grep -Fx "$file"
+done
 ```
 
 Build the Arch packages from the current checkout:

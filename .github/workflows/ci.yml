@@ -37,4 +37,11 @@ jobs:
         run: python3 -m json.tool gnome-extension/metadata.json
 
       - name: Check JavaScript syntax
-        run: node --input-type=module --check < gnome-extension/extension.js
+        run: |
+          node --input-type=module --check < gnome-extension/extension.js
+          node --input-type=module --check < gnome-extension/prefs.js
+          node --input-type=module --check < gnome-extension/protocol.js
+          node --input-type=module --check < gnome-extension/error-contract.js
+
+      - name: Test GNOME error contract
+        run: node tests/gnome-error-contract.test.js

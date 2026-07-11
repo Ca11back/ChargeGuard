@@ -70,6 +70,10 @@ package_gnome-shell-extension-chargeguard() {
     "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/extension.js"
   install -Dm644 "gnome-extension/prefs.js" \
     "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/prefs.js"
+  install -Dm644 "gnome-extension/protocol.js" \
+    "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/protocol.js"
+  install -Dm644 "gnome-extension/error-contract.js" \
+    "${pkgdir}/usr/share/gnome-shell/extensions/chargeguard@github.com/error-contract.js"
   install -Dm644 "gnome-extension/README.md" \
     "${pkgdir}/usr/share/doc/gnome-shell-extension-chargeguard/README.md"
   install -d "${pkgdir}/usr/share/locale/zh_CN/LC_MESSAGES"

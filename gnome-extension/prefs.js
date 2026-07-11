@@ -5,6 +5,8 @@ import GObject from 'gi://GObject';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import {classifyError} from './protocol.js';
+
 const SERVICE_NAME = 'io.github.ChargeGuard1';
 const OBJECT_PATH = '/io/github/ChargeGuard1';
 const INTERFACE_NAME = 'io.github.ChargeGuard1.Manager';
@@ -53,33 +55,6 @@ function firstOutArg(result) {
         return result[0];
 
     return result;
-}
-
-function remoteErrorName(error) {
-    try {
-        return Gio.DBusError.get_remote_error(error);
-    } catch {
-        return null;
-    }
-}
-
-function classifyError(error) {
-    const remoteName = remoteErrorName(error) ?? '';
-    const message = error?.message ?? String(error);
-    const normalized = `${remoteName} ${message}`.toLowerCase();
-
-    if (normalized.includes('accessdenied') || normalized.includes('access denied') ||
-        normalized.includes('permission'))
-        return {kind: 'permission-denied', message};
-
-    if (normalized.includes('serviceunknown') || normalized.includes('service unknown') ||
-        normalized.includes('not provided') || normalized.includes('not activatable'))
-        return {kind: 'backend-unavailable', message};
-
-    if (normalized.includes('notsupported') || normalized.includes('not supported'))
-        return {kind: 'unsupported', message};
-
-    return {kind: 'error', message};
 }
 
 class ChargeGuardClient {

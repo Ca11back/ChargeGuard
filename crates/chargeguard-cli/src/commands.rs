@@ -11,6 +11,8 @@ use zbus::zvariant::OwnedValue;
 pub type Result<T> = std::result::Result<T, CliError>;
 type PropertyMap = HashMap<String, OwnedValue>;
 
+const ERROR_PREFIX: &str = "io.github.ChargeGuard1.Error.";
+
 #[derive(Debug, Parser)]
 #[command(name = "chargeguard")]
 #[command(about = "Manage native Linux battery charging modes")]
@@ -48,9 +50,7 @@ pub struct ChargeGuardClient {
 
 impl ChargeGuardClient {
     pub async fn connect() -> Result<Self> {
-        let connection = zbus::Connection::system()
-            .await
-            .map_err(|error| ChargeGuardError::ServiceUnavailable(error.to_string()))?;
+        let connection = zbus::Connection::system().await?;
 
         Ok(Self { connection })
     }
@@ -171,11 +171,232 @@ impl CliError {
     pub fn code(&self) -> &'static str {
         match self {
             CliError::Core(error) => error.code(),
-            CliError::Zbus(_) | CliError::Protocol(_) | CliError::Zvariant(_) => {
-                "service_unavailable"
-            }
-            CliError::Json(_) => "internal_error",
-            CliError::AmbiguousDevice => "invalid_mode",
+            CliError::Zbus(error) => code_from_zbus_error(error),
+            CliError::Protocol(_) | CliError::Zvariant(_) | CliError::Json(_) => "internal_error",
+            CliError::AmbiguousDevice => "ambiguous_device",
         }
+    }
+}
+
+fn code_from_zbus_error(error: &zbus::Error) -> &'static str {
+    match error {
+        zbus::Error::MethodError(name, _, _) => code_from_remote_name(name.as_str()),
+        _ => "internal_error",
+    }
+}
+
+fn code_from_remote_name(name: &str) -> &'static str {
+    match name {
+        "org.freedesktop.DBus.Error.ServiceUnknown"
+        | "org.freedesktop.DBus.Error.NameHasNoOwner" => "service_unavailable",
+        "io.github.ChargeGuard1.Error.UnsupportedDevice" => "unsupported_device",
+        "io.github.ChargeGuard1.Error.NoNativeModeInterface" => "no_native_mode_interface",
+        "io.github.ChargeGuard1.Error.NativeModesNotEnumerable" => "native_modes_not_enumerable",
+        "io.github.ChargeGuard1.Error.InvalidMode" => "invalid_mode",
+        "io.github.ChargeGuard1.Error.PermissionDenied" => "permission_denied",
+        "io.github.ChargeGuard1.Error.SysfsReadFailed" => "sysfs_read_failed",
+        "io.github.ChargeGuard1.Error.SysfsWriteFailed" => "sysfs_write_failed",
+        "io.github.ChargeGuard1.Error.ReadbackMismatch" => "readback_mismatch",
+        "io.github.ChargeGuard1.Error.ServiceUnavailable" => "service_unavailable",
+        "io.github.ChargeGuard1.Error.InternalError" => "internal_error",
+        _ if name.starts_with(ERROR_PREFIX) => "internal_error",
+        _ => "internal_error",
+    }
+}
+
+pub fn format_error(error: &CliError) -> String {
+    format!("{}: {error}", error.code())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{io, path::PathBuf};
+
+    use super::*;
+    use zbus::zvariant::Value;
+
+    fn string_value(value: &str) -> OwnedValue {
+        OwnedValue::try_from(Value::from(value)).expect("test string is a valid D-Bus value")
+    }
+
+    #[test]
+    fn decodes_exact_remote_error_names() {
+        let cases = [
+            (
+                "io.github.ChargeGuard1.Error.UnsupportedDevice",
+                "unsupported_device",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.NoNativeModeInterface",
+                "no_native_mode_interface",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.NativeModesNotEnumerable",
+                "native_modes_not_enumerable",
+            ),
+            ("io.github.ChargeGuard1.Error.InvalidMode", "invalid_mode"),
+            (
+                "io.github.ChargeGuard1.Error.PermissionDenied",
+                "permission_denied",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.SysfsReadFailed",
+                "sysfs_read_failed",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.SysfsWriteFailed",
+                "sysfs_write_failed",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.ReadbackMismatch",
+                "readback_mismatch",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.ServiceUnavailable",
+                "service_unavailable",
+            ),
+            (
+                "io.github.ChargeGuard1.Error.InternalError",
+                "internal_error",
+            ),
+            (
+                "org.freedesktop.DBus.Error.ServiceUnknown",
+                "service_unavailable",
+            ),
+            (
+                "org.freedesktop.DBus.Error.NameHasNoOwner",
+                "service_unavailable",
+            ),
+            ("io.github.ChargeGuard1.Error.FutureError", "internal_error"),
+            ("org.freedesktop.DBus.Error.Failed", "internal_error"),
+        ];
+
+        for (name, expected) in cases {
+            assert_eq!(code_from_remote_name(name), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn protocol_and_local_errors_have_stable_prefixes() {
+        let cases = [
+            (
+                CliError::Protocol("missing D-Bus json field".to_string()),
+                "internal_error: missing D-Bus json field",
+            ),
+            (
+                CliError::AmbiguousDevice,
+                "ambiguous_device: multiple batteries were discovered; pass --device or DEVICE",
+            ),
+        ];
+
+        for (error, expected) in cases {
+            assert_eq!(format_error(&error), expected);
+        }
+    }
+
+    #[test]
+    fn every_core_error_renders_its_exact_stderr_prefix() {
+        let path = PathBuf::from("/sys/class/power_supply/BAT0/charge_type");
+        let cases = [
+            (
+                ChargeGuardError::UnsupportedDevice("BAT0".to_string()),
+                "unsupported_device: ",
+            ),
+            (
+                ChargeGuardError::NoNativeModeInterface {
+                    device_id: "BAT0".to_string(),
+                },
+                "no_native_mode_interface: ",
+            ),
+            (
+                ChargeGuardError::NativeModesNotEnumerable {
+                    device_id: "BAT0".to_string(),
+                },
+                "native_modes_not_enumerable: ",
+            ),
+            (
+                ChargeGuardError::InvalidMode {
+                    device_id: "BAT0".to_string(),
+                    requested: "Turbo".to_string(),
+                },
+                "invalid_mode: ",
+            ),
+            (
+                ChargeGuardError::PermissionDenied("denied".to_string()),
+                "permission_denied: ",
+            ),
+            (
+                ChargeGuardError::SysfsReadFailed {
+                    path: path.clone(),
+                    source: io::Error::other("read failed"),
+                },
+                "sysfs_read_failed: ",
+            ),
+            (
+                ChargeGuardError::SysfsWriteFailed {
+                    path: path.clone(),
+                    source: io::Error::other("write failed"),
+                },
+                "sysfs_write_failed: ",
+            ),
+            (
+                ChargeGuardError::ReadbackMismatch {
+                    device_id: "BAT0".to_string(),
+                    requested: "Fast".to_string(),
+                    actual: Some("Standard".to_string()),
+                },
+                "readback_mismatch: ",
+            ),
+            (
+                ChargeGuardError::ServiceUnavailable("missing".to_string()),
+                "service_unavailable: ",
+            ),
+            (
+                ChargeGuardError::ParseNativeModes {
+                    path: path.clone(),
+                    message: "bad modes".to_string(),
+                },
+                "internal_error: ",
+            ),
+            (
+                ChargeGuardError::Internal("unexpected".to_string()),
+                "internal_error: ",
+            ),
+        ];
+
+        for (error, expected_prefix) in cases {
+            let rendered = format_error(&CliError::Core(error));
+            assert!(
+                rendered.starts_with(expected_prefix),
+                "expected {expected_prefix:?}, got {rendered:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_payloads_are_internal_errors() {
+        let missing = PropertyMap::new();
+        let error = from_json_field::<serde_json::Value>(&missing).unwrap_err();
+        assert_eq!(error.code(), "internal_error");
+
+        let mut wrong_type = PropertyMap::new();
+        wrong_type.insert("json".to_string(), OwnedValue::from(42u32));
+        let error = from_json_field::<serde_json::Value>(&wrong_type).unwrap_err();
+        assert_eq!(error.code(), "internal_error");
+
+        let mut invalid_json = PropertyMap::new();
+        invalid_json.insert("json".to_string(), string_value("{"));
+        let error = from_json_field::<serde_json::Value>(&invalid_json).unwrap_err();
+        assert_eq!(error.code(), "internal_error");
+    }
+
+    #[test]
+    fn non_method_dbus_failures_are_internal_errors() {
+        let error = CliError::Zbus(zbus::Error::Failure("transport failed".to_string()));
+        assert_eq!(error.code(), "internal_error");
+        assert_eq!(
+            format_error(&error),
+            "internal_error: D-Bus error: transport failed"
+        );
     }
 }

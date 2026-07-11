@@ -7,7 +7,7 @@ use commands::{ChargeGuardClient, Cli, Command};
 #[tokio::main]
 async fn main() {
     if let Err(error) = run().await {
-        eprintln!("{}: {error}", error.code());
+        eprintln!("{}", commands::format_error(&error));
         std::process::exit(1);
     }
 }
