@@ -1,0 +1,131 @@
+.TH CHARGEGUARD 1 "July 2026" "ChargeGuard" "User Commands"
+.SH NAME
+chargeguard \- manage firmware-native Linux battery charging modes
+.SH SYNOPSIS
+.B chargeguard
+.I COMMAND
+.RI [ arguments ]
+.SH DESCRIPTION
+.B chargeguard
+is the command-line client for ChargeGuard.
+It discovers battery charging modes exposed by the Linux power_supply sysfs
+interface and communicates with the ChargeGuard daemon over the system D-Bus.
+.PP
+ChargeGuard operates only on modes reported by the device firmware and kernel
+driver.  It does not implement percentage charge thresholds or general power
+management.  A mode being reported does not guarantee that a later write will
+succeed; the driver, firmware, and authorization policy decide the result.
+.SH COMMANDS
+.TP
+.B list
+List all present battery devices discovered by ChargeGuard.
+.TP
+.BR current " [" DEVICE "]"
+Show the current native charging mode for
+.IR DEVICE .
+When DEVICE is omitted, ChargeGuard selects the only discovered battery and
+reports an error if no battery or multiple batteries are available.
+.TP
+.BR modes " [" DEVICE "]"
+Show the firmware-reported modes offered for switching on
+.IR DEVICE ,
+including the raw tokens accepted by the backend.
+Device selection when DEVICE is omitted is the same as for
+.BR current .
+.TP
+.BR set " [--device " DEVICE "] " MODE
+Request a change to the exact firmware-reported raw
+.IR MODE .
+When
+.B --device
+is omitted, ChargeGuard selects the only discovered battery.
+The daemon reads the available modes before writing, rejects values not
+reported by the device, writes through the native sysfs interface, and verifies
+the result by reading it back.
+This is the only mutating command and is subject to the
+.B io.github.ChargeGuard1.set-native-mode
+polkit action.
+.TP
+.BR doctor " [--json]"
+Collect a local diagnostic snapshot containing backend version, kernel and
+service information, discovered devices, relevant power_supply attributes, and
+explicit collection failures.
+With
+.BR --json ,
+write the structured snapshot as JSON.  Without it, write a human-readable
+report.  Partial data is retained when individual sysfs reads fail.
+.TP
+.BR raw " [" DEVICE "]"
+Show the raw power_supply observations used by ChargeGuard, optionally limited
+to DEVICE.  Collection issues affecting the output are shown explicitly.
+.SH DEVICE SELECTION
+The optional DEVICE value is the power_supply device identifier, such as
+.BR BAT0 .
+For commands that accept an omitted device, automatic selection succeeds only
+when exactly one present battery is discovered.  Pass DEVICE (or
+.BR "--device DEVICE"
+for
+.BR set )
+on multi-battery systems.
+.SH SAFETY
+Before changing a mode, inspect
+.B chargeguard modes
+and use the raw token it reports.  ChargeGuard does not translate a requested
+mode into thresholds and does not write modes absent from the device's reported
+list.  The daemon performs the privileged write; ordinary inspection commands
+do not require the set-mode polkit authorization.
+.SH DIAGNOSTICS AND PRIVACY
+.B doctor
+and
+.B raw
+read local sysfs and service state.  Their output can include local device
+identifiers, model information, filesystem paths, and driver-provided values.
+ChargeGuard does not transmit this information, but review diagnostic output
+before sharing it.
+.SH ERRORS
+Errors are written to standard error in the stable form
+.PP
+.RS
+.I code: message
+.RE
+.PP
+where code is a machine-readable snake_case identifier and message is
+human-readable context.  Examples of error conditions include an unsupported
+device or interface, an ambiguous device selection, an invalid mode, denied
+authorization, sysfs read or write failure, readback mismatch, unavailable
+service, and an internal protocol or parsing failure.  Programs should use the
+code rather than parse the message.
+.SH EXIT STATUS
+.TP
+.B 0
+The requested command completed successfully.
+.TP
+.B 1
+Discovery, D-Bus communication, authorization, validation, diagnostics, or a
+native interface operation failed.
+.SH FILES AND INTERFACES
+.TP
+.I /sys/class/power_supply
+Kernel power_supply devices and firmware-native charging-mode attributes.
+.TP
+.I /usr/share/dbus-1/system-services/io.github.ChargeGuard1.service
+System D-Bus activation definition.
+.TP
+.I /usr/share/dbus-1/system.d/io.github.ChargeGuard1.conf
+System bus policy.
+.TP
+.I /usr/share/polkit-1/actions/io.github.ChargeGuard1.policy
+Authorization policy for changing a native mode.
+.TP
+.I /usr/lib/systemd/system/chargeguardd.service
+The D-Bus-activated backend service.
+.SH COMPATIBILITY
+Available native interfaces and raw mode tokens are hardware-, firmware-, and
+kernel-driver-specific.  Some systems expose no supported interface, and a
+kernel or firmware change can alter the available modes.
+.SH SEE ALSO
+.BR systemctl (1),
+.BR systemd.service (5),
+.BR polkit (8)
+.PP
+Project documentation: https://github.com/Ca11back/ChargeGuard

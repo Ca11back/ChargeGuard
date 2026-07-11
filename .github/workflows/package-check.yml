@@ -57,9 +57,40 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
-              pacman -Syu --noconfirm cargo dbus gettext git polkit
+              pacman -Syu --noconfirm cargo dbus gettext git groff man-db polkit systemd
+              groff -ww -mandoc -Tutf8 docs/chargeguard.1 >/dev/null
+              staged_man=/tmp/chargeguard-man
+              install -Dm644 docs/chargeguard.1 "$staged_man/man1/chargeguard.1"
+              MANPATH="$staged_man" man -w chargeguard | grep -Fx "$staged_man/man1/chargeguard.1"
+              MANPATH="$staged_man" systemd-analyze verify packaging/systemd/chargeguardd.service
               useradd -m builder
               chown -R builder:builder /workspace
               su builder -c "cd /workspace/packaging/arch && makepkg --printsrcinfo > .SRCINFO.generated"
+              cmp packaging/arch/.SRCINFO packaging/arch/.SRCINFO.generated
               su builder -c "cd /workspace/packaging/arch && makepkg -f --cleanbuild --noconfirm"
+              backend_package=$(find packaging/arch -maxdepth 1 -type f -name "chargeguard-[0-9]*.pkg.tar.*" -print -quit)
+              test -n "$backend_package"
+              bsdtar -tf "$backend_package" | grep -Eq "^usr/share/man/man1/chargeguard\\.1(\\.gz)?$"
+              if bsdtar -tf "$backend_package" | grep -q "^usr/share/man/man1/chargeguard\\.1\\.gz$"; then
+                bsdtar -xOf "$backend_package" usr/share/man/man1/chargeguard.1.gz | gzip -dc | groff -ww -mandoc -Tutf8 >/dev/null
+              else
+                bsdtar -xOf "$backend_package" usr/share/man/man1/chargeguard.1 | groff -ww -mandoc -Tutf8 >/dev/null
+              fi
+              extracted=/tmp/chargeguard-package
+              mkdir -p "$extracted"
+              bsdtar -xf "$backend_package" -C "$extracted"
+              "$extracted/usr/bin/chargeguard" help | grep -F "Usage: chargeguard <COMMAND>"
+              for command in list current modes set doctor raw; do
+                "$extracted/usr/bin/chargeguard" "$command" --help >/tmp/"$command".help
+                grep -F "Usage: chargeguard $command" /tmp/"$command".help
+                grep -Eq "^\\.(B|BR) $command" docs/chargeguard.1
+              done
+              grep -F "[DEVICE]" /tmp/current.help
+              grep -F "[DEVICE]" /tmp/modes.help
+              grep -F "[OPTIONS] <MODE>" /tmp/set.help
+              grep -F -- "--device <DEVICE>" /tmp/set.help
+              grep -F -- "--json" /tmp/doctor.help
+              grep -F "[DEVICE]" /tmp/raw.help
+              MANPATH="$extracted/usr/share/man" man -w chargeguard | grep -E "/usr/share/man/man1/chargeguard\\.1(\\.gz)?$"
+              MANPATH="$extracted/usr/share/man" systemd-analyze verify "$extracted/usr/lib/systemd/system/chargeguardd.service"
             '
