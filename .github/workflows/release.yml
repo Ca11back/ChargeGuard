@@ -39,6 +39,7 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
+              set -euo pipefail
               pacman -Syu --noconfirm gettext gnome-shell libarchive nodejs
               node --input-type=module --check < gnome-extension/extension.js
               node --input-type=module --check < gnome-extension/prefs.js

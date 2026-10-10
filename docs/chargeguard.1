@@ -61,12 +61,21 @@ to DEVICE.  Collection issues affecting the output are shown explicitly.
 .SH DEVICE SELECTION
 The optional DEVICE value is the power_supply device identifier, such as
 .BR BAT0 .
-For commands that accept an omitted device, automatic selection succeeds only
-when exactly one present battery is discovered.  Pass DEVICE (or
+For
+.BR current ,
+.BR modes ,
+and
+.BR set ,
+automatic selection succeeds only when exactly one present battery is
+discovered.  Pass DEVICE (or
 .BR "--device DEVICE"
 for
 .BR set )
 on multi-battery systems.
+The
+.B raw
+command shows all power_supply entries when DEVICE is omitted, including
+non-battery entries; passing DEVICE filters those observations by identifier.
 .SH SAFETY
 Before changing a mode, inspect
 .B chargeguard modes
@@ -83,7 +92,7 @@ identifiers, model information, filesystem paths, and driver-provided values.
 ChargeGuard does not transmit this information, but review diagnostic output
 before sharing it.
 .SH ERRORS
-Errors are written to standard error in the stable form
+Operational errors are written to standard error in the stable form
 .PP
 .RS
 .I code: message
@@ -95,6 +104,7 @@ device or interface, an ambiguous device selection, an invalid mode, denied
 authorization, sysfs read or write failure, readback mismatch, unavailable
 service, and an internal protocol or parsing failure.  Programs should use the
 code rather than parse the message.
+Command-line argument errors instead use the command parser's usage messages.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -103,6 +113,9 @@ The requested command completed successfully.
 .B 1
 Discovery, D-Bus communication, authorization, validation, diagnostics, or a
 native interface operation failed.
+.TP
+.B 2
+Command-line arguments were invalid.
 .SH FILES AND INTERFACES
 .TP
 .I /sys/class/power_supply

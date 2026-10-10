@@ -21,6 +21,7 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
+              set -euo pipefail
               pacman -Syu --noconfirm gettext gnome-shell libarchive nodejs python
               python3 -m json.tool gnome-extension/metadata.json
               node --input-type=module --check < gnome-extension/extension.js
@@ -57,6 +58,7 @@ jobs:
             -w /workspace \
             archlinux:base-devel \
             bash -lc '
+              set -euo pipefail
               pacman -Syu --noconfirm cargo dbus gettext git groff man-db polkit systemd
               groff -ww -mandoc -Tutf8 docs/chargeguard.1 >/dev/null
               staged_man=/tmp/chargeguard-man
