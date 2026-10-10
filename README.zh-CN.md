@@ -66,8 +66,8 @@ yay -S gnome-shell-extension-chargeguard
 yay -S chargeguard
 ```
 
-扩展当前面向 GNOME Shell 50。安装或升级后，如果 GNOME Wayland 尚未加载新
-扩展，请注销并重新登录，然后启用它：
+扩展支持 GNOME Shell 50 和 51。安装或升级后，如果 GNOME Wayland 尚未加载
+新扩展，请注销并重新登录，然后启用它：
 
 ```bash
 gnome-extensions enable chargeguard@github.com
@@ -147,8 +147,8 @@ chargeguard current BAT1
 - 存在多块电池：把 `chargeguard list` 显示的设备 ID 传给 `current`、`modes`、
   `raw`，或通过 `set --device` 指定。
 - 检查过程中读取失败：运行 `chargeguard doctor`，报告问题时保留其中明确的失败记录。
-- 安装后看不到扩展：确认 GNOME Shell 50，在 Wayland 中注销并重新登录，再检查
-  `gnome-extensions info chargeguard@github.com`。
+- 安装后看不到扩展：确认 GNOME Shell 50 或 51，在 Wayland 中注销并重新登录，
+  再检查 `gnome-extensions info chargeguard@github.com`。
 - 系统结构和权限边界：[架构说明](docs/architecture.md)。
 - 问题反馈：[GitHub Issues](https://github.com/Ca11back/ChargeGuard/issues)。
 

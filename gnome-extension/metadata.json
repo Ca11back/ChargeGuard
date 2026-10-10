@@ -4,8 +4,9 @@
   "description": "Manage native battery charging modes from GNOME Quick Settings.",
   "gettext-domain": "chargeguard",
   "shell-version": [
-    "50"
+    "50",
+    "51"
   ],
   "url": "https://github.com/Ca11back/ChargeGuard",
-  "version": 2
+  "version": 3
 }

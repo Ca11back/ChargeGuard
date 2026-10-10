@@ -72,7 +72,7 @@ For CLI-only use:
 yay -S chargeguard
 ```
 
-The extension currently targets GNOME Shell 50. After installation or an
+The extension supports GNOME Shell 50 and 51. After installation or an
 upgrade, log out and back in if GNOME Wayland has not loaded the new extension,
 then enable it:
 
@@ -162,8 +162,8 @@ error, and exit-status reference.
   `current`, `modes`, `raw`, or `set --device`.
 - Failed inspection: run `chargeguard doctor` and keep its explicit failure
   entries when reporting the problem.
-- Extension missing after installation: verify GNOME Shell 50, log out and back
-  in on Wayland, then check `gnome-extensions info chargeguard@github.com`.
+- Extension missing after installation: verify GNOME Shell 50 or 51, log out
+  and back in on Wayland, then check `gnome-extensions info chargeguard@github.com`.
 - System design and privilege boundaries: [Architecture](docs/architecture.md).
 - Bugs and support requests: [GitHub Issues](https://github.com/Ca11back/ChargeGuard/issues).
 

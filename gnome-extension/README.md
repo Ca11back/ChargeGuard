@@ -4,6 +4,8 @@ This directory contains the first ChargeGuard GNOME Shell extension. It uses
 GNOME Quick Settings as the primary surface and talks to the existing
 `io.github.ChargeGuard1` system D-Bus backend.
 
+The extension supports GNOME Shell 50 and 51.
+
 Packaging and release publication are intentionally outside this directory.
 
 ## Local Development
@@ -16,8 +18,8 @@ ln -sfn "$PWD/gnome-extension" \
   ~/.local/share/gnome-shell/extensions/chargeguard@github.com
 ```
 
-Reload the GNOME Shell session as appropriate for the session type, then enable
-the extension:
+GNOME Shell must reload extension metadata after installation or changes to
+`metadata.json`. Log out and log back in, then enable the extension:
 
 ```bash
 gnome-extensions enable chargeguard@github.com

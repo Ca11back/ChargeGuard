@@ -1,5 +1,13 @@
 # ChargeGuard Compatibility
 
+## GNOME Shell
+
+The GNOME extension supports GNOME Shell 50 and 51. After installing or updating
+the extension, log out and log back in so GNOME Shell reloads its metadata, then
+enable `chargeguard@github.com` in GNOME Extensions.
+
+## Battery Support
+
 The MVP targets Linux batteries that expose native charging modes through:
 
 ```text
